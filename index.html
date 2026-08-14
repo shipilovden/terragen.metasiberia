@@ -4,6 +4,27 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>TERRA GEN · Terrain Editor</title>
+<meta name="description" content="Create procedural and real-world terrain with map import, sculpting, materials, trees, and export tools.">
+<meta name="theme-color" content="#0b0d10">
+<link rel="canonical" href="https://terra-gen.vercel.app/">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="TerrainGen">
+<meta property="og:locale" content="en_US">
+<meta property="og:locale:alternate" content="ru_RU">
+<meta property="og:title" content="TerrainGen — Terrain Editor">
+<meta property="og:description" content="Create procedural and real-world terrain with map import, sculpting, materials, trees, and export tools.">
+<meta property="og:url" content="https://terra-gen.vercel.app/">
+<meta property="og:image" content="https://terra-gen.vercel.app/social-preview.png">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="2560">
+<meta property="og:image:height" content="1250">
+<meta property="og:image:alt" content="TerrainGen terrain editor showing a sculpted river valley">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="TerrainGen — Terrain Editor">
+<meta name="twitter:description" content="Create procedural and real-world terrain with map import, sculpting, materials, trees, and export tools.">
+<meta name="twitter:image" content="https://terra-gen.vercel.app/social-preview.png">
+<meta name="twitter:image:alt" content="TerrainGen terrain editor showing a sculpted river valley">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
 <style>
 :root{
@@ -224,6 +245,7 @@ aside[data-drawer="preview"] #previewSettings,
 aside[data-drawer="export"] #exportSettings{display:block}
 .icon-button{display:inline-flex;align-items:center;justify-content:center;gap:6px}
 .icon-button svg{width:16px;height:16px;flex:none;stroke-width:1.8}
+.sculpt-active{cursor:crosshair}
 .icon-label{display:inline}
 body.icons-ready .icon-button .icon-label{display:none}
 .tool-menu .tool-list .icon-button{min-height:38px;padding:6px 7px;justify-content:flex-start;text-align:left}
@@ -327,6 +349,8 @@ body.icons-ready .map-control-labeled.icon-button .icon-label{display:inline}
     <button id="exportEXR" class="on">EXR</button>
     <button id="exportMask">MATERIALS</button>
     <button id="exportTrees">TREES</button>
+    <button id="exportRoads">ROADS</button>
+    <button id="exportBuildings">BUILDINGS</button>
     <button id="exportBundle" class="primary">ZIP</button>
   </div>
 </header>
@@ -450,7 +474,15 @@ body.icons-ready .map-control-labeled.icon-button .icon-label{display:inline}
           <option value="2048">2048 × 2048 — terrain only (experimental)</option>
         </select>
       </div>
+      <div class="field"><label>road/building mask resolution (px)</label>
+        <select id="pReferenceMaskSize">
+          <option value="1024">1024 × 1024 — compatible</option>
+          <option value="2048" selected>2048 × 2048 — high detail</option>
+          <option value="4096">4096 × 4096 — very high detail</option>
+        </select>
+      </div>
       <div class="mini" id="mapSizeInfo">Now: world 8192 m · grid 512² · export 1024 px. 1024 is EXR pixel size, not world meters.</div>
+      <div class="mini">Roads and building footprints are rasterized from the original OSM vectors at their own resolution. Keep terrain export at 1024 for current Metasiberia compatibility; use 2048 or 4096 for sharper reference masks.</div>
     </div>
   </details>
 
@@ -491,6 +523,8 @@ body.icons-ready .map-control-labeled.icon-button .icon-label{display:inline}
     </select></div>
     <button type="button" id="mapImport" class="wide primary">ADD TO TERRAIN EDITOR</button>
     <div class="row map-island-option"><input id="mapMakeIsland" type="checkbox" checked><label for="mapMakeIsland">MAKE ISLAND FROM SELECTED AREA</label></div>
+    <div class="row map-island-option"><input id="mapImportRoads" type="checkbox" checked><label for="mapImportRoads">LOAD ROADS</label></div>
+    <div class="row map-island-option"><input id="mapImportBuildings" type="checkbox" checked><label for="mapImportBuildings">LOAD BUILDINGS</label></div>
     <div class="mini map-status" id="mapStatus">Ready to draw an area.</div>
     <div class="map-source">Map layers: <a href="https://openfreemap.org/" target="_blank" rel="noreferrer">© OpenFreeMap</a> · <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors</a> · <a href="https://www.arcgis.com/home/item.html?id=10df2279f9684e4a9f6a7f08febac2a9" target="_blank" rel="noreferrer">© Esri World Imagery</a> · <a href="https://www.opentopomap.org/about" target="_blank" rel="noreferrer">© OpenTopoMap</a>.<br>Search: <a href="https://github.com/komoot/photon" target="_blank" rel="noreferrer">Photon</a> / OpenStreetMap.<br>Elevation: <a href="https://registry.opendata.aws/terrain-tiles/" target="_blank" rel="noreferrer">Mapzen Terrarium / AWS Open Data</a>.<br>Fallback: <a href="https://open-meteo.com/en/docs/elevation-api" target="_blank" rel="noreferrer">Open-Meteo</a>.</div>
   </div>
@@ -657,6 +691,9 @@ body.icons-ready .map-control-labeled.icon-button .icon-label{display:inline}
   <div class="sect context-3d drawer-section" id="previewSettings" data-drawer-section="preview">
     <h2>3D PREVIEW</h2>
     <div class="param"><label>3D preview height exaggeration <b id="vHeightScale">8.0×</b></label><input id="pHeightScale" type="range" min="25" max="1600" value="800"></div>
+    <div class="row"><input id="sculpt3dToggle" type="checkbox"><label for="sculpt3dToggle">SCULPT IN 3D</label></div>
+    <button type="button" id="openSculptTools" class="wide">OPEN SCULPT TOOLS</button>
+    <div class="mini" id="sculpt3dHelp">When enabled: left drag sculpts, Alt + left drag rotates, right/middle drag pans, wheel zooms.</div>
     <div class="mini">Preview only. EXR already stores meters, so Metasiberia terrain height scale must be 1.0.</div>
   </div>
 
@@ -665,6 +702,7 @@ body.icons-ready .map-control-labeled.icon-button .icon-label{display:inline}
     <div class="row"><input id="flipY" type="checkbox" checked><label for="flipY">Substrata orientation · flip vertically</label></div>
     <button id="exportHeightPNG" class="wide">HEIGHT PREVIEW PNG</button>
     <input id="projectFile" type="file" accept=".json,.tforge" hidden>
+    <div class="mini">Roads and buildings are independent reference masks. They do not alter the EXR or create parcels automatically.</div>
     <div class="mini">EXR uses one float channel named Y. Current Metasiberia renders detail 1 as ground and B/detail 2 as vegetation; R/detail 0 and detail 3 are not rendered separately yet. Tree mask is opaque: white = trees and B vegetation, black = no trees.</div>
   </div>
 </aside>
@@ -736,7 +774,7 @@ const store={
 window.__sfStore=store;
 
 const $=id=>document.getElementById(id);
-let G=512, OUT=1024, PRE=192; let worldSize=8192,terrainAspect=1;
+let G=512, OUT=1024, REF_OUT=2048, PRE=192; let worldSize=8192,terrainAspect=1;
 let height=new Float32Array(G*G);
 let autoRGB=new Uint8ClampedArray(G*G*3);
 let maskRGB=new Uint8ClampedArray(G*G*3);
@@ -744,11 +782,14 @@ let overrideA=new Uint8ClampedArray(G*G);
 let treeMask=new Uint8ClampedArray(G*G);
 let treeAutoMask=new Uint8ClampedArray(G*G);
 let treeMaterialOverrideA=new Uint8ClampedArray(G*G);
+let geoRoadMask=new Uint8ClampedArray(G*G);
+let geoBuildingMask=new Uint8ClampedArray(G*G);
 let tool='mountain',materialTool='r',treeTool='treeAdd',maskTool=materialTool,mode='height',drawing=false,lastPt=null;
 let undoStack=[],redoStack=[],dirty3d=true,baseTemplate='island',islandKind='classic',terrainSeed=42,forestSeed=104729;
 let symMirrorX=false,symMirrorY=false,symRadial=0;
 let activeSculptPeak=0,strokeStartMax=0,strokeSamples=0,visualPeak=0;
 let geoMap=null,geoMapReady=false,geoMode='polygon',geoPoints=[],geoSelectionClosed=false,geoSelectionMode=null,geoLayer=null,geoDrawing=false,geoStartLatLng=null,geoPanning=false,geoPanLast=null,geoImporting=false,geoSourceMeta=null,geoPreviousMode='height';
+let geoFeatureSource=null;
 let geoRasterLayer=null,geoVectorLayer=null,geoMapLibre=null,geoVectorLoading=null,geoMapLanguage='en';
 const GEO_BASEMAP_ORDER=['streets','satellite','topographic'];
 let geoBasemapMode=GEO_BASEMAP_ORDER.includes(store.getItem('terra-gen-basemap'))?store.getItem('terra-gen-basemap'):'streets';
@@ -986,7 +1027,7 @@ function updateUndoButtons(){
   if($('redoTop'))$('redoTop').disabled=!canRedo;
 }
 function captureHistoryState(){
-  return {g:G,h:new Float32Array(height),am:new Uint8ClampedArray(autoRGB),m:new Uint8ClampedArray(maskRGB),o:new Uint8ClampedArray(overrideA),t:new Uint8ClampedArray(treeMask),ta:new Uint8ClampedArray(treeAutoMask),tm:new Uint8ClampedArray(treeMaterialOverrideA),a:terrainAspect,geo:geoSourceMeta?JSON.parse(JSON.stringify(geoSourceMeta)):null,base:baseTemplate};
+  return {g:G,h:new Float32Array(height),am:new Uint8ClampedArray(autoRGB),m:new Uint8ClampedArray(maskRGB),o:new Uint8ClampedArray(overrideA),t:new Uint8ClampedArray(treeMask),ta:new Uint8ClampedArray(treeAutoMask),tm:new Uint8ClampedArray(treeMaterialOverrideA),roads:new Uint8ClampedArray(geoRoadMask),buildings:new Uint8ClampedArray(geoBuildingMask),a:terrainAspect,geo:geoSourceMeta?JSON.parse(JSON.stringify(geoSourceMeta)):null,features:geoFeatureSource,base:baseTemplate};
 }
 function snapshot(){
   undoStack.push(captureHistoryState());
@@ -1008,7 +1049,7 @@ function normalizeTreeMask(arr){
 function restore(s){
   if(Number.isFinite(s.g)&&s.g!==G){G=s.g;if($('pResolution'))$('pResolution').value=String(G);display=ctx.createImageData(G,G);}
   height=new Float32Array(s.h);maskRGB=new Uint8ClampedArray(s.m);autoRGB=s.am?new Uint8ClampedArray(s.am):new Uint8ClampedArray(maskRGB);overrideA=new Uint8ClampedArray(s.o);
-  treeMask=normalizeTreeMask(s.t);treeAutoMask=s.ta?new Uint8ClampedArray(s.ta):buildAutomaticForestMask();treeMaterialOverrideA=s.tm?new Uint8ClampedArray(s.tm):new Uint8ClampedArray(G*G);geoSourceMeta=s.geo?JSON.parse(JSON.stringify(s.geo)):null;baseTemplate=s.base||baseTemplate;setTerrainAspect(Number.isFinite(s.a)?s.a:1);refreshVisualPeak();dirty3d=true;dirtyPreview3d=true;render2d();updateUndoButtons();
+  treeMask=normalizeTreeMask(s.t);treeAutoMask=s.ta?new Uint8ClampedArray(s.ta):buildAutomaticForestMask();treeMaterialOverrideA=s.tm?new Uint8ClampedArray(s.tm):new Uint8ClampedArray(G*G);geoRoadMask=s.roads?new Uint8ClampedArray(s.roads):new Uint8ClampedArray(G*G);geoBuildingMask=s.buildings?new Uint8ClampedArray(s.buildings):new Uint8ClampedArray(G*G);geoSourceMeta=s.geo?JSON.parse(JSON.stringify(s.geo)):null;geoFeatureSource=s.features||null;baseTemplate=s.base||baseTemplate;setTerrainAspect(Number.isFinite(s.a)?s.a:1);refreshVisualPeak();dirty3d=true;dirtyPreview3d=true;render2d();updateUndoButtons();
 }
 function doUndo(){
   if(!undoStack.length)return;
@@ -1442,7 +1483,7 @@ function setIslandKind(ik, regenerate){
 }
 function makeTemplate(kind){
   snapshot();visualPeak=0;baseTemplate=kind;
-  geoSourceMeta=null;setTerrainAspect(1);
+  geoSourceMeta=null;geoFeatureSource=null;setTerrainAspect(1);
   terrainSeed=+$('pSeed').value||42;
   const sea=+$('pSea').value,land=+$('pLand').value,peak=+$('pPeak').value;
   document.querySelectorAll('[data-template]').forEach(b=>b.classList.toggle('primary',b.dataset.template===kind));
@@ -1569,7 +1610,7 @@ function makeTemplate(kind){
   }
   if(kind!=='blank') naturalizeHeightField(sea, peak);
   refreshVisualPeak();
-  overrideA.fill(0);treeMask.fill(0);treeMaterialOverrideA.fill(0);generateAutoMask();treeAutoMask=buildAutomaticForestMask();applyForestToMaterialMask();render2d();dirty3d=true;dirtyPreview3d=true;
+  overrideA.fill(0);treeMask.fill(0);treeMaterialOverrideA.fill(0);geoRoadMask.fill(0);geoBuildingMask.fill(0);generateAutoMask();treeAutoMask=buildAutomaticForestMask();applyForestToMaterialMask();render2d();dirty3d=true;dirtyPreview3d=true;
   const templateButton=document.querySelector('[data-template="'+kind+'"]');
   const generatedLabel=kind==='island'?('ISLAND · '+islandLabel(islandKind)):((templateButton?.textContent||kind).trim());
   $('status').textContent=generatedLabel+' · seed '+terrainSeed+' · naturalized';updateUndoButtons();
@@ -1662,15 +1703,20 @@ function mirrorHeight(axis){
   const nextT=new Uint8ClampedArray(treeMask);
   const nextTA=new Uint8ClampedArray(treeAutoMask);
   const nextTM=new Uint8ClampedArray(treeMaterialOverrideA);
+  const nextRoads=new Uint8ClampedArray(geoRoadMask),nextBuildings=new Uint8ClampedArray(geoBuildingMask);
   for(let y=0;y<G;y++)for(let x=0;x<G;x++){
     const sx=axis==='h'?G-1-x:x;
     const sy=axis==='v'?G-1-y:y;
     const i=idx(x,y),j=idx(sx,sy);
     next[i]=height[j];
-    nextO[i]=overrideA[j];nextT[i]=treeMask[j];nextTA[i]=treeAutoMask[j];nextTM[i]=treeMaterialOverrideA[j];
+    nextO[i]=overrideA[j];nextT[i]=treeMask[j];nextTA[i]=treeAutoMask[j];nextTM[i]=treeMaterialOverrideA[j];nextRoads[i]=geoRoadMask[j];nextBuildings[i]=geoBuildingMask[j];
     nextM[i*3]=maskRGB[j*3];nextM[i*3+1]=maskRGB[j*3+1];nextM[i*3+2]=maskRGB[j*3+2];
   }
-  height=next;maskRGB=nextM;overrideA=nextO;treeMask=nextT;treeAutoMask=nextTA;treeMaterialOverrideA=nextTM;
+  height=next;maskRGB=nextM;overrideA=nextO;treeMask=nextT;treeAutoMask=nextTA;treeMaterialOverrideA=nextTM;geoRoadMask=nextRoads;geoBuildingMask=nextBuildings;
+  // The source vectors are tied to the imported map orientation. After a mirror,
+  // the raster masks remain correct but the original geographic vectors no longer
+  // do, so exports intentionally fall back to the edited masks.
+  geoFeatureSource=null;
   dirty3d=true;dirtyPreview3d=true;render2d();updateUndoButtons();
   $('status').textContent=axis==='h'?'mirrored horizontally':'mirrored vertically';
 }
@@ -1681,7 +1727,7 @@ function importHeightmapFile(file){
   const img=new Image();
   img.onload=()=>{
     snapshot();
-    geoSourceMeta=null;baseTemplate='heightmap';setTerrainAspect(1);
+    geoSourceMeta=null;geoFeatureSource=null;baseTemplate='heightmap';setTerrainAspect(1);
     const c=document.createElement('canvas');c.width=G;c.height=G;
     const g=c.getContext('2d');
     g.drawImage(img,0,0,G,G);
@@ -1692,7 +1738,7 @@ function importHeightmapFile(file){
       const gray=(y*0.299+u*0.587+v*0.114)/255;
       height[i]=lerp(sea,peak,gray);
     }
-    overrideA.fill(0);treeMask.fill(0);treeMaterialOverrideA.fill(0);generateAutoMask();treeAutoMask=buildAutomaticForestMask();applyForestToMaterialMask();
+    overrideA.fill(0);treeMask.fill(0);treeMaterialOverrideA.fill(0);geoRoadMask.fill(0);geoBuildingMask.fill(0);generateAutoMask();treeAutoMask=buildAutomaticForestMask();applyForestToMaterialMask();
     dirty3d=true;dirtyPreview3d=true;render2d();updateUndoButtons();
     $('status').textContent='heightmap imported · '+file.name;
     URL.revokeObjectURL(url);
@@ -1738,7 +1784,10 @@ setIslandKind(islandKind, false);
 document.querySelectorAll('[data-tool]').forEach(b=>b.onclick=()=>{
   tool=b.dataset.tool;document.querySelectorAll('#heightTools [data-tool]').forEach(x=>x.classList.toggle('on',x===b));
   if(typeof updateSculptCurrent==='function') updateSculptCurrent(tool);
-  mode='height';show2d('height');
+  const keep3d=mode==='3d'||$('tab3d')?.classList.contains('on');
+  mode=keep3d?'3d':'height';
+  if(keep3d){dirtyPreview3d=true;update3d();if(typeof syncTerrainContext==='function')syncTerrainContext();}
+  else show2d('height');
 });
 document.querySelectorAll('[data-mask]').forEach(b=>b.onclick=()=>{
   const selected=b.dataset.mask;
@@ -2039,6 +2088,17 @@ $('tab3d').onclick=()=>{
   $('tabHeight').classList.remove('on');$('tabMask').classList.remove('on');$('tabTrees').classList.remove('on');$('tabMap').classList.remove('on');$('tab3d').classList.add('on');
   resize3d();update3d();
 };
+if($('sculpt3dToggle'))$('sculpt3dToggle').addEventListener('change',()=>{
+  previewCanvas?.classList.toggle('sculpt-active',$('sculpt3dToggle').checked);
+  if($('status'))$('status').textContent=$('sculpt3dToggle').checked?'3D sculpting enabled · left drag edits · Alt+drag rotates':'3D sculpting disabled · drag rotates';
+  if(typeof syncTerrainContext==='function')syncTerrainContext();
+});
+if($('openSculptTools'))$('openSculptTools').onclick=()=>{
+  if($('sculpt3dToggle'))$('sculpt3dToggle').checked=true;
+  previewCanvas?.classList.add('sculpt-active');
+  if(typeof window.terraGenOpenDrawer==='function')window.terraGenOpenDrawer('sculpt',false);
+  if(typeof syncTerrainContext==='function')syncTerrainContext();
+};
 
 $('mapRectangleMode').onclick=()=>setGeoMode('rectangle');
 $('mapPolygonMode').onclick=()=>setGeoMode('polygon');
@@ -2147,6 +2207,160 @@ function geoPointInPolygon(lng,lat,points=geoPoints){
     if(crosses)inside=!inside;
   }
   return inside;
+}
+const GEO_OVERPASS_ENDPOINTS=[
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter'
+];
+function geoRoadsFromVectorBasemap(north,south,west,east){
+  const map=geoMapLibre;if(!map?.queryRenderedFeatures||!geoMap)return [];
+  try{
+    const layers=(map.getStyle()?.layers||[]).filter(layer=>layer.type==='line'&&/^road_/.test(layer.id)&&!/path|pedestrian|rail|transit/.test(layer.id));
+    if(!layers.length)return [];
+    const a=geoMap.latLngToContainerPoint({lat:north,lng:west}),b=geoMap.latLngToContainerPoint({lat:south,lng:east});
+    const features=map.queryRenderedFeatures([[Math.min(a.x,b.x),Math.min(a.y,b.y)],[Math.max(a.x,b.x),Math.max(a.y,b.y)]],{layers:layers.map(layer=>layer.id)});
+    const roads=[],seen=new Set();
+    for(const feature of features){
+      const geometry=feature.geometry,coordinates=geometry?.type==='LineString'?[geometry.coordinates]:geometry?.type==='MultiLineString'?geometry.coordinates:[];
+      for(const line of coordinates){
+        if(!Array.isArray(line)||line.length<2)continue;
+        const key=(feature.id??roads.length)+':'+line[0]?.[0]+':'+line[0]?.[1];if(seen.has(key))continue;seen.add(key);
+        roads.push({geometry:line.map(([lon,lat])=>({lon,lat})),tags:{highway:feature.properties?.highway||feature.properties?.class||'road'}});
+      }
+    }
+    return roads;
+  }catch(error){console.warn('Vector basemap road extraction failed.',error);return []}
+}
+async function geoRoadsFromOsmMapApi(north,south,west,east){
+  if(east-west>.25||north-south>.25)return [];
+  const response=await fetch('https://api.openstreetmap.org/api/0.6/map?bbox='+[west,south,east,north].join(','),{headers:{Accept:'application/xml'}});
+  if(!response.ok)throw Error('OSM map API HTTP '+response.status);
+  const xml=new DOMParser().parseFromString(await response.text(),'application/xml'),nodes=new Map();
+  xml.querySelectorAll('node').forEach(node=>nodes.set(node.getAttribute('id'),{lon:+node.getAttribute('lon'),lat:+node.getAttribute('lat')}));
+  const ignored=new Set(['footway','path','cycleway','pedestrian','steps','bridleway','corridor','construction','proposed']),roads=[];
+  xml.querySelectorAll('way').forEach(way=>{
+    const highway=Array.from(way.querySelectorAll(':scope > tag')).find(tag=>tag.getAttribute('k')==='highway')?.getAttribute('v');
+    const geometry=Array.from(way.querySelectorAll(':scope > nd')).map(nd=>nodes.get(nd.getAttribute('ref'))).filter(Boolean);
+    if(highway&&!ignored.has(highway)&&geometry.length>1)roads.push({geometry,tags:{highway}});
+  });
+  return roads;
+}
+function geoRoadWidthMeters(kind){
+  return ({motorway:12,trunk:11,primary:9,secondary:8,tertiary:7,unclassified:6,residential:6,living_street:5,service:4.5,track:3.5})[kind]||5;
+}
+function geoTerrainPoint(lon,lat,north,south,west,east,mapping={},rasterSize=G){
+  const lonSpan=Math.max(1e-12,east-west),latSpan=Math.max(1e-12,north-south),padding=Number.isFinite(+mapping.padding)?+mapping.padding:0,scale=Number.isFinite(+mapping.scale)?+mapping.scale:1,paddingX=Number.isFinite(+mapping.paddingX)?+mapping.paddingX:padding,paddingY=Number.isFinite(+mapping.paddingY)?+mapping.paddingY:padding,scaleX=Number.isFinite(+mapping.scaleX)?+mapping.scaleX:scale,scaleY=Number.isFinite(+mapping.scaleY)?+mapping.scaleY:scale;
+  const sourceU=(lon-west)/lonSpan,sourceV=(north-lat)/latSpan;
+  if(sourceU<0||sourceU>1||sourceV<0||sourceV>1)return null;
+  return {x:(paddingX+sourceU*scaleX)*(rasterSize-1),y:(paddingY+sourceV*scaleY)*(rasterSize-1),u:sourceU,v:sourceV};
+}
+async function fetchGeoRoads(north,south,west,east){
+  const query='[out:json][timeout:25];way["highway"]('+south+','+west+','+north+','+east+');out geom;';
+  const ignoredRoadTypes=new Set(['footway','path','cycleway','pedestrian','steps','bridleway','corridor','construction','proposed']);
+  let lastError=null;
+  for(const endpoint of GEO_OVERPASS_ENDPOINTS){
+    try{
+      const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),30000);
+      let response;
+      try{response=await fetch(endpoint+'?'+new URLSearchParams({data:query}),{headers:{Accept:'application/json'},signal:controller.signal});}
+      finally{clearTimeout(timer);}
+      if(!response.ok)throw Error('HTTP '+response.status);
+      const data=await response.json(),ways=Array.isArray(data.elements)?data.elements.filter(way=>Array.isArray(way.geometry)&&way.geometry.length>1&&!ignoredRoadTypes.has(way.tags?.highway)):[];
+      return ways;
+    }catch(error){lastError=error;}
+  }
+  try{
+    const osmRoads=await geoRoadsFromOsmMapApi(north,south,west,east);
+    if(osmRoads.length)return osmRoads;
+  }catch(error){lastError=error;}
+  const vectorRoads=geoRoadsFromVectorBasemap(north,south,west,east);
+  if(vectorRoads.length)return vectorRoads;
+  throw Error('OSM road request failed'+(lastError?.message?' · '+lastError.message:''));
+}
+async function fetchGeoBuildings(north,south,west,east){
+  const query='[out:json][timeout:25];way["building"]('+south+','+west+','+north+','+east+');out geom;';
+  let lastError=null;
+  for(const endpoint of GEO_OVERPASS_ENDPOINTS){
+    try{
+      const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),30000);
+      let response;
+      try{response=await fetch(endpoint+'?'+new URLSearchParams({data:query}),{headers:{Accept:'application/json'},signal:controller.signal});}
+      finally{clearTimeout(timer);}
+      if(!response.ok)throw Error('HTTP '+response.status);
+      const data=await response.json(),buildings=Array.isArray(data.elements)?data.elements.filter(way=>Array.isArray(way.geometry)&&way.geometry.length>=3):[];
+      return buildings;
+    }catch(error){lastError=error;}
+  }
+  try{
+    if(east-west>.25||north-south>.25)throw Error('area too large for OSM map fallback');
+    const response=await fetch('https://api.openstreetmap.org/api/0.6/map?bbox='+[west,south,east,north].join(','),{headers:{Accept:'application/xml'}});
+    if(!response.ok)throw Error('OSM map API HTTP '+response.status);
+    const xml=new DOMParser().parseFromString(await response.text(),'application/xml'),nodes=new Map();
+    xml.querySelectorAll('node').forEach(node=>nodes.set(node.getAttribute('id'),{lon:+node.getAttribute('lon'),lat:+node.getAttribute('lat')}));
+    const buildings=[];
+    xml.querySelectorAll('way').forEach(way=>{
+      const hasBuilding=Array.from(way.querySelectorAll(':scope > tag')).some(tag=>tag.getAttribute('k')==='building');
+      const geometry=Array.from(way.querySelectorAll(':scope > nd')).map(nd=>nodes.get(nd.getAttribute('ref'))).filter(Boolean);
+      if(hasBuilding&&geometry.length>=3)buildings.push({geometry});
+    });
+    if(buildings.length)return buildings;
+  }catch(error){lastError=error;}
+  throw Error('OSM building request failed'+(lastError?.message?' · '+lastError.message:''));
+}
+function applyGeoRoads(roads,north,south,west,east,selectionWidth,selectionHeight,mapping={}){
+  if(!roads?.length)return 0;
+  const featureScale=Number.isFinite(+mapping.scale)?+mapping.scale:1;
+  const cellWidth=selectionWidth*featureScale/Math.max(1,G-1),cellHeight=selectionHeight*featureScale/Math.max(1,G-1);
+  let changed=0;
+  const stamp=(lng,lat,width)=>{
+    if(lng<west||lng>east||lat<south||lat>north||!geoPointInPolygon(lng,lat))return;
+    const point=geoTerrainPoint(lng,lat,north,south,west,east,mapping);if(!point)return;
+    const x=point.x,y=point.y;
+    const radius=Math.max(1,width/Math.min(cellWidth,cellHeight)*.5),blockRadius=radius+Math.max(1,4/Math.min(cellWidth,cellHeight));
+    const minX=Math.max(0,Math.floor(x-blockRadius)),maxX=Math.min(G-1,Math.ceil(x+blockRadius));
+    const minY=Math.max(0,Math.floor(y-blockRadius)),maxY=Math.min(G-1,Math.ceil(y+blockRadius));
+    for(let py=minY;py<=maxY;py++)for(let px=minX;px<=maxX;px++){
+      const distance=Math.hypot((px-x)*cellWidth,(py-y)*cellHeight),falloff=clamp(1-distance/(width*.5+Math.max(cellWidth,cellHeight)*1.5),0,1);
+      if(falloff>0){const i=idx(px,py);geoRoadMask[i]=Math.max(geoRoadMask[i],Math.round(falloff*255));changed++;}
+      if(distance<=blockRadius*Math.min(cellWidth,cellHeight))treeMask[idx(px,py)]=255;
+    }
+  };
+  for(const way of roads){
+    const width=geoRoadWidthMeters(way.tags?.highway);
+    for(let n=1;n<way.geometry.length;n++){
+      const a=way.geometry[n-1],b=way.geometry[n],ap=geoTerrainPoint(a.lon,a.lat,north,south,west,east,mapping),bp=geoTerrainPoint(b.lon,b.lat,north,south,west,east,mapping);
+      if(!ap||!bp)continue;
+      const ax=ap.x,ay=ap.y,bx=bp.x,by=bp.y;
+      const steps=Math.max(1,Math.ceil(Math.hypot(bx-ax,by-ay)/Math.max(1,width/Math.min(cellWidth,cellHeight)*.35)));
+      for(let s=0;s<=steps;s++){const t=s/steps;stamp(a.lon+(b.lon-a.lon)*t,a.lat+(b.lat-a.lat)*t,width);}
+    }
+  }
+  return changed;
+}
+function applyGeoBuildings(buildings,north,south,west,east,mapping={}){
+  geoBuildingMask.fill(0);
+  if(!buildings?.length)return 0;
+  const canvas=document.createElement('canvas');canvas.width=G;canvas.height=G;
+  const context=canvas.getContext('2d',{willReadFrequently:true});if(!context)return 0;
+  context.fillStyle='#fff';
+  for(const building of buildings){
+    const geometry=building?.geometry;if(!Array.isArray(geometry)||geometry.length<3)continue;
+    context.beginPath();let points=0;
+    for(const point of geometry){
+      const mapped=geoTerrainPoint(point.lon,point.lat,north,south,west,east,mapping);if(!mapped)continue;
+      if(points++)context.lineTo(mapped.x,mapped.y);else context.moveTo(mapped.x,mapped.y);
+    }
+    if(points>=3){context.closePath();context.fill();}
+  }
+  const pixels=context.getImageData(0,0,G,G).data,padding=Number.isFinite(+mapping.padding)?+mapping.padding:0,scale=Number.isFinite(+mapping.scale)?+mapping.scale:1;
+  for(let y=0;y<G;y++)for(let x=0;x<G;x++){
+    const sourceU=(x/Math.max(1,G-1)-padding)/Math.max(1e-12,scale),sourceV=(y/Math.max(1,G-1)-padding)/Math.max(1e-12,scale),i=idx(x,y);
+    if(sourceU<0||sourceU>1||sourceV<0||sourceV>1)continue;
+    const lon=west+(east-west)*sourceU,lat=north-(north-south)*sourceV;
+    if(!geoPointInPolygon(lon,lat))continue;
+    geoBuildingMask[i]=pixels[i*4+3];
+  }
+  return buildings.length;
 }
 function geoElevationUrl(samples){
   const params=new URLSearchParams();
@@ -2404,7 +2618,29 @@ async function importGeoSelection(){
     }
     if(!Number.isFinite(actualMin)||!Number.isFinite(actualMax))throw Error('selected area contains no samples');
     const sea=+$('pSea').value,land=+$('pLand').value,peak=Math.max(land+1,+$('pPeak').value),relative=$('mapHeightMode').value==='relative';
-    const makeIsland=!!$('mapMakeIsland')?.checked,selectionMode=geoSelectionMode||geoMode;
+    const makeIsland=!!$('mapMakeIsland')?.checked;
+    const importRoads=!!$('mapImportRoads')?.checked;
+    const importBuildings=!!$('mapImportBuildings')?.checked;
+    const selectionMode=geoSelectionMode||geoMode;
+    let roads=[],buildings=[];
+    if(importRoads){
+      try{
+        setGeoStatus('Loading OpenStreetMap roads…');
+        roads=await fetchGeoRoads(north,south,west,east);
+      }catch(error){
+        console.warn('OSM road import failed; importing terrain without roads.',error);
+        setGeoStatus('Roads unavailable · importing terrain without roads');
+      }
+    }
+    if(importBuildings){
+      try{
+        setGeoStatus('Loading OpenStreetMap buildings…');
+        buildings=await fetchGeoBuildings(north,south,west,east);
+      }catch(error){
+        console.warn('OSM building import failed; importing terrain without buildings.',error);
+        setGeoStatus('Buildings unavailable · importing terrain without buildings');
+      }
+    }
     const islandPadding=makeIsland?(selectionMode==='rectangle'?.07:.09):0;
     snapshot();
     setTerrainAspect(selectionAspect);
@@ -2426,15 +2662,23 @@ async function importGeoSelection(){
         }else height[i]=mapped;
       }
     }
-    visualPeak=0;baseTemplate='map';geoSourceMeta={provider:elevationProvider,bounds:{north,south,west,east},points:geoPoints.map(p=>({lat:p.lat,lng:p.lng})),selectionMode,island:makeIsland,coastPadding:islandPadding,mapping:relative?'relative':'absolute',elevationMin:actualMin,elevationMax:actualMax,samples:size,tileZoom:elevationZoom,tileCount:elevationTiles,widthMeters:selectionWidth,heightMeters:selectionHeight,aspect:terrainAspect};
-    overrideA.fill(0);treeMask.fill(0);treeMaterialOverrideA.fill(0);generateAutoMask(true);treeAutoMask=buildAutomaticForestMask();applyForestToMaterialMask();
+    visualPeak=0;baseTemplate='map';geoSourceMeta={provider:elevationProvider,bounds:{north,south,west,east},points:geoPoints.map(p=>({lat:p.lat,lng:p.lng})),selectionMode,island:makeIsland,coastPadding:islandPadding,mapping:relative?'relative':'absolute',elevationMin:actualMin,elevationMax:actualMax,samples:size,tileZoom:elevationZoom,tileCount:elevationTiles,widthMeters:selectionWidth,heightMeters:selectionHeight,aspect:terrainAspect,roads:importRoads,roadCount:roads.length,buildings:importBuildings,buildingCount:buildings.length};
+    overrideA.fill(0);treeMask.fill(0);treeMaterialOverrideA.fill(0);geoRoadMask.fill(0);geoBuildingMask.fill(0);generateAutoMask(true);treeAutoMask=buildAutomaticForestMask();
+    const featureMapping=makeIsland?{padding:islandPadding,scale:Math.max(.01,1-islandPadding*2)}:{padding:0,scale:1};
+    geoFeatureSource={north,south,west,east,widthMeters:selectionWidth,heightMeters:selectionHeight,mapping:featureMapping,roads:roads.map(way=>({geometry:(way.geometry||[]).map(point=>({lon:+point.lon,lat:+point.lat})),tags:way.tags?{highway:way.tags.highway}:undefined})),buildings:buildings.map(way=>({geometry:(way.geometry||[]).map(point=>({lon:+point.lon,lat:+point.lat}))}))};
+    if(roads.length)applyGeoRoads(roads,north,south,west,east,selectionWidth,selectionHeight,featureMapping);
+    if(buildings.length)applyGeoBuildings(buildings,north,south,west,east,featureMapping);
+    if(roads.length||buildings.length){generateAutoMask(true);treeAutoMask=buildAutomaticForestMask();}
+    applyForestToMaterialMask();
     refreshVisualPeak();dirty3d=true;dirtyPreview3d=true;render2d();updateUndoButtons();
     show2d('height');
     if(typeof window.terraGenOpenDrawer==='function')window.terraGenOpenDrawer('sculpt');
     const modeLabel=relative?'relative relief':'absolute elevation';
     const islandLabel=makeIsland?' · island with shelf':'';
-    $('status').textContent='real terrain imported · '+modeLabel+islandLabel+' · '+actualMin.toFixed(0)+'–'+actualMax.toFixed(0)+' m';
-    setGeoStatus('Imported into the editor'+islandLabel+' · '+actualMin.toFixed(0)+'–'+actualMax.toFixed(0)+' m source elevation.');
+    const roadsLabel=importRoads?' · roads '+(roads.length?'loaded':'not found'):'';
+    const buildingsLabel=importBuildings?' · buildings '+(buildings.length?'loaded':'not found'):'';
+    $('status').textContent='real terrain imported · '+modeLabel+islandLabel+roadsLabel+buildingsLabel+' · '+actualMin.toFixed(0)+'–'+actualMax.toFixed(0)+' m';
+    setGeoStatus('Imported into the editor'+islandLabel+roadsLabel+buildingsLabel+' · '+actualMin.toFixed(0)+'–'+actualMax.toFixed(0)+' m source elevation.');
   }catch(error){
     console.error(error);setGeoStatus('Import failed · '+error.message);$('status').textContent='map import failed · '+error.message;
   }finally{geoImporting=false;if(button)button.disabled=false;}
@@ -3021,6 +3265,18 @@ function render2d(){
 
     }else{
       d[o]=relief[0];d[o+1]=relief[1];d[o+2]=relief[2];
+      if(mode==='height'&&geoRoadMask[i]){
+        const road=geoRoadMask[i]/255;
+        d[o]=Math.round(lerp(d[o],72,road));
+        d[o+1]=Math.round(lerp(d[o+1],68,road));
+        d[o+2]=Math.round(lerp(d[o+2],58,road));
+      }
+      if(mode==='height'&&geoBuildingMask[i]){
+        const building=geoBuildingMask[i]/255;
+        d[o]=Math.round(lerp(d[o],112,building));
+        d[o+1]=Math.round(lerp(d[o+1],94,building));
+        d[o+2]=Math.round(lerp(d[o+2],78,building));
+      }
     }
 
     d[o+3]=255;
@@ -3040,6 +3296,7 @@ function render2d(){
   ctx.imageSmoothingEnabled=true;
   const visible=G/mapZoom,left=clamp(G/2+mapPanX-visible/2,0,G-visible),top=clamp(G/2+mapPanY-visible/2,0,G-visible);
   ctx.drawImage(hi,left*2,top*2,visible*2,visible*2,0,0,cv.width,cv.height);
+  if(mode==='height'&&geoFeatureSource)drawGeoFeatures2d(ctx,left,top,visible);
 
   if(brushCursor.x>=0){
     const sx=cv.width/visible,sy=cv.height/visible;
@@ -3055,7 +3312,7 @@ function render2d(){
 
 // ---------- 3D preview (dependency-free Canvas 2D) ----------
 let threeReady=true, r3=null, s3=null, c3=null, mesh3=null, geo3=null, mat3=null, sun=null;
-let theta=-0.72,phi=0.78,dist=1,target={x:0,y:0},drag3=null,dirtyPreview3d=true;
+let theta=-0.72,phi=0.78,dist=1,target={x:0,y:0},drag3=null,dirtyPreview3d=true,previewHitCells=[],previewSculpting=false,previewSculptLast=null;
 const previewCanvas=$('preview3d');
 const previewCtx=previewCanvas.getContext('2d',{alpha:false});
 function cam3(){}
@@ -3078,6 +3335,60 @@ function update3dCompass(){
   const cp=Math.cos(phi),northAngle=Math.atan2(Math.sin(theta),Math.cos(theta)*cp),eastAngle=Math.atan2(Math.cos(theta),-Math.sin(theta)*cp);
   setCompassAxes(northAngle,eastAngle);
 }
+function geoFeaturePoint(point,size=G){
+  if(!geoFeatureSource||!point)return null;
+  return geoTerrainPoint(point.lon,point.lat,geoFeatureSource.north,geoFeatureSource.south,geoFeatureSource.west,geoFeatureSource.east,geoFeatureSource.mapping||{},size);
+}
+function geoFeatureExportPoint(point,size=OUT){
+  const gridPoint=geoFeaturePoint(point,G);if(!gridPoint)return null;
+  const axis=terrainAxisScale(),startX=(1-axis.x)*size*.5,startY=(1-axis.y)*size*.5;
+  return {x:startX+(gridPoint.x/Math.max(1,G-1))*size*axis.x-.5,y:startY+(gridPoint.y/Math.max(1,G-1))*size*axis.y-.5};
+}
+function drawGeoFeatures2d(target,left,top,visible){
+  const source=geoFeatureSource;if(!source)return;
+  const scaleX=cv.width/Math.max(1,visible),scaleY=cv.height/Math.max(1,visible),contentWidth=Number.isFinite(+source.widthMeters)?+source.widthMeters:worldSize||8192,featureScale=Number.isFinite(+source.mapping?.scale)?+source.mapping.scale:1;
+  const gridMeters=contentWidth*featureScale/Math.max(1,G-1);
+  const screenPoint=point=>{const p=geoFeaturePoint(point);return p?{x:(p.x-left)*scaleX,y:(p.y-top)*scaleY}:null;};
+  target.save();target.beginPath();target.rect(0,0,cv.width,cv.height);target.clip();target.lineCap='round';target.lineJoin='round';
+  target.globalAlpha=.9;target.strokeStyle='#40352d';target.fillStyle='rgba(112,94,78,.76)';
+  for(const way of source.roads||[]){
+    const geometry=way?.geometry;if(!Array.isArray(geometry)||geometry.length<2)continue;
+    target.lineWidth=Math.max(1,geoRoadWidthMeters(way.tags?.highway)/Math.max(.001,gridMeters)*scaleX);
+    target.beginPath();let points=0;
+    for(const point of geometry){const p=screenPoint(point);if(!p)continue;if(points++)target.lineTo(p.x,p.y);else target.moveTo(p.x,p.y);}
+    if(points>=2)target.stroke();
+  }
+  for(const building of source.buildings||[]){
+    const geometry=building?.geometry;if(!Array.isArray(geometry)||geometry.length<3)continue;
+    target.beginPath();let points=0;
+    for(const point of geometry){const p=screenPoint(point);if(!p)continue;if(points++)target.lineTo(p.x,p.y);else target.moveTo(p.x,p.y);}
+    if(points>=3){target.closePath();target.fill();target.strokeStyle='rgba(70,54,44,.92)';target.lineWidth=Math.max(.7,scaleX*.45);target.stroke();}
+  }
+  target.restore();
+}
+function drawGeoFeatures3d(target,w,h,scale,axis,hs){
+  const source=geoFeatureSource;if(!source)return;
+  const contentWidth=Number.isFinite(+source.widthMeters)?+source.widthMeters:worldSize||8192,featureScale=Number.isFinite(+source.mapping?.scale)?+source.mapping.scale:1;
+  const gridMeters=contentWidth*featureScale/Math.max(1,G-1);
+  const projectPoint=point=>{const p=geoFeaturePoint(point);if(!p)return null;const z=bilinearField(height,G,G,p.x,p.y)[0]*hs;return project3d((p.x-G/2)*axis.x,(p.y-G/2)*axis.y,z,w,h,scale);};
+  target.save();target.lineCap='round';target.lineJoin='round';target.globalAlpha=.88;
+  target.strokeStyle='#44362e';
+  for(const way of source.roads||[]){
+    const geometry=way?.geometry;if(!Array.isArray(geometry)||geometry.length<2)continue;
+    target.lineWidth=Math.max(1,geoRoadWidthMeters(way.tags?.highway)/Math.max(.001,gridMeters)*axis.x*scale*1.35);
+    target.beginPath();let points=0;
+    for(const point of geometry){const p=projectPoint(point);if(!p)continue;if(points++)target.lineTo(p.x,p.y);else target.moveTo(p.x,p.y);}
+    if(points>=2)target.stroke();
+  }
+  target.fillStyle='rgba(125,100,82,.84)';target.strokeStyle='rgba(62,47,39,.95)';target.lineWidth=Math.max(1,scale*.45);
+  for(const building of source.buildings||[]){
+    const geometry=building?.geometry;if(!Array.isArray(geometry)||geometry.length<3)continue;
+    target.beginPath();let points=0;
+    for(const point of geometry){const p=projectPoint(point);if(!p)continue;if(points++)target.lineTo(p.x,p.y);else target.moveTo(p.x,p.y);}
+    if(points>=3){target.closePath();target.fill();target.stroke();}
+  }
+  target.restore();
+}
 function update3d(){
   if(mode!=='3d'&&!dirtyPreview3d)return;
   dirtyPreview3d=false;
@@ -3091,7 +3402,7 @@ function update3d(){
   const scale=Math.min(w,h)/(G*1.52)*dist,axis=terrainAxisScale();
   g.lineJoin='round';
   // back-to-front painter order
-  const cells=[];
+  const cells=[];previewHitCells=[];
   for(let y=0;y<G-1;y+=step)for(let x=0;x<G-1;x+=step){
     const x1=Math.min(G-1,x+step),y1=Math.min(G-1,y+step),cx=(x+x1)*.5,cy=(y+y1)*.5;
     const depth=(cx-G/2)*axis.x*Math.sin(theta)+(cy-G/2)*axis.y*Math.cos(theta);
@@ -3106,17 +3417,60 @@ function update3d(){
     const col=heightColor(av);
     const slope=(height[ids[0]]-height[ids[2]])*.018+(height[ids[1]]-height[ids[3]])*.012;
     const shade=clamp(.92+slope,.45,1.18);
-    g.fillStyle=`rgb(${Math.round(col[0]*shade)},${Math.round(col[1]*shade)},${Math.round(col[2]*shade)})`;
+    const road=Math.max(geoRoadMask[ids[0]],geoRoadMask[ids[1]],geoRoadMask[ids[2]],geoRoadMask[ids[3]])/255;
+    const building=Math.max(geoBuildingMask[ids[0]],geoBuildingMask[ids[1]],geoBuildingMask[ids[2]],geoBuildingMask[ids[3]])/255;
+    const roadCol=[72,68,58];
+    const buildingCol=[112,94,78];
+    const roadColoured=road?col.map((value,index)=>lerp(value,roadCol[index],road)):col;
+    const finalCol=building?roadColoured.map((value,index)=>lerp(value,buildingCol[index],building)):roadColoured;
+    g.fillStyle=`rgb(${Math.round(finalCol[0]*shade)},${Math.round(finalCol[1]*shade)},${Math.round(finalCol[2]*shade)})`;
     g.beginPath();g.moveTo(pts[0].x,pts[0].y);for(let i=1;i<4;i++)g.lineTo(pts[i].x,pts[i].y);g.closePath();g.fill();
+    previewHitCells.push({depth:cell[0],x:(x+x1)*.5,y:(y+y1)*.5,pts});
   }
+  drawGeoFeatures3d(g,w,h,scale,axis,hs);
+}
+function pointInPolygon2d(x,y,points){
+  let inside=false;
+  for(let i=0,j=points.length-1;i<points.length;j=i++){
+    const a=points[i],b=points[j],cross=((a.y>y)!==(b.y>y))&&(x<(b.x-a.x)*(y-a.y)/(b.y-a.y||1e-12)+a.x);
+    if(cross)inside=!inside;
+  }
+  return inside;
+}
+function previewPointToTerrain(event){
+  if(!previewHitCells.length)return null;
+  const rect=previewCanvas.getBoundingClientRect(),x=(event.clientX-rect.left)*previewCanvas.width/Math.max(1,rect.width),y=(event.clientY-rect.top)*previewCanvas.height/Math.max(1,rect.height);
+  let best=null;
+  for(const cell of previewHitCells)if(pointInPolygon2d(x,y,cell.pts)&&(!best||cell.depth>best.depth))best=cell;
+  return best?{x:clamp(best.x,0,G-1),y:clamp(best.y,0,G-1)}:null;
+}
+function finishPreviewSculpt(){
+  if(!previewSculpting)return;
+  previewSculpting=false;previewSculptLast=null;
+  if($('autoMask')?.checked)generateAutoMask(false);
+  endSculptStroke();dirty3d=true;dirtyPreview3d=true;render2d();update3d();
 }
 if(previewCanvas){
   new ResizeObserver(resize3d).observe(previewCanvas);
   previewCanvas.addEventListener('contextmenu',e=>e.preventDefault());
-  previewCanvas.addEventListener('pointerdown',e=>{drag3={x:e.clientX,y:e.clientY,t:theta,p:phi,tx:target.x,ty:target.y,b:e.button};previewCanvas.setPointerCapture(e.pointerId);});
-  previewCanvas.addEventListener('pointermove',e=>{if(!drag3)return;const dx=e.clientX-drag3.x,dy=e.clientY-drag3.y;if(drag3.b===0){theta=drag3.t-dx*.007;phi=clamp(drag3.p-dy*.005,.2,1.35);}else{target.x=drag3.tx-dx/dist;target.y=drag3.ty-dy/dist;}dirtyPreview3d=true;update3d();});
-  previewCanvas.addEventListener('pointerup',()=>drag3=null);
-  previewCanvas.addEventListener('pointercancel',()=>drag3=null);
+  previewCanvas.addEventListener('pointerdown',e=>{
+    if(e.button===0&&$('sculpt3dToggle')?.checked&&!e.altKey){
+      const hit=previewPointToTerrain(e);
+      if(hit){snapshot();previewSculpting=true;previewSculptLast=hit;previewCanvas.setPointerCapture(e.pointerId);beginSculptStroke();stampHeight(hit.x,hit.y,null);dirty3d=true;dirtyPreview3d=true;render2d();update3d();return;}
+    }
+    drag3={x:e.clientX,y:e.clientY,t:theta,p:phi,tx:target.x,ty:target.y,b:e.button};previewCanvas.setPointerCapture(e.pointerId);
+  });
+  previewCanvas.addEventListener('pointermove',e=>{
+    if(previewSculpting){
+      const hit=previewPointToTerrain(e);if(!hit)return;
+      const previous=previewSculptLast||hit,stepDistance=Math.max(.35,(+$('pRadius').value||1)*.22),distance=Math.hypot(hit.x-previous.x,hit.y-previous.y),steps=Math.max(1,Math.ceil(distance/stepDistance));
+      for(let i=1;i<=steps;i++){const q={x:lerp(previous.x,hit.x,i/steps),y:lerp(previous.y,hit.y,i/steps)};stampHeight(q.x,q.y,previewSculptLast);previewSculptLast=q;}
+      dirty3d=true;dirtyPreview3d=true;render2d();update3d();return;
+    }
+    if(!drag3)return;const dx=e.clientX-drag3.x,dy=e.clientY-drag3.y;if(drag3.b===0){theta=drag3.t-dx*.007;phi=clamp(drag3.p-dy*.005,.2,1.35);}else{target.x=drag3.tx-dx/dist;target.y=drag3.ty-dy/dist;}dirtyPreview3d=true;update3d();
+  });
+  previewCanvas.addEventListener('pointerup',()=>{if(previewSculpting)finishPreviewSculpt();drag3=null;});
+  previewCanvas.addEventListener('pointercancel',()=>{if(previewSculpting)finishPreviewSculpt();drag3=null;});
   previewCanvas.addEventListener('wheel',e=>{e.preventDefault();dist=clamp(dist*(e.deltaY>0?.9:1.1),.45,3.2);dirtyPreview3d=true;update3d();},{passive:false});
 }
 // ---------- resampling/export ----------
@@ -3198,6 +3552,62 @@ function buildTreeMaskCanvas(materialData=buildExportMaterialData()){
   }
   return canvasFromRGBData(rgb);
 }
+function resampleReferenceMask(mask,size=REF_OUT){
+  const out=new Uint8ClampedArray(size*size);
+  for(let y=0;y<size;y++)for(let x=0;x<size;x++){
+    const source=exportSourceAt(x,y,size);
+    out[y*size+x]=source?clamp(Math.round(bilinearField(mask,G,G,source.x,source.y)[0]),0,255):0;
+  }
+  return out;
+}
+function canvasFromGrayData(gray,size=REF_OUT){
+  const raw=document.createElement('canvas');raw.width=raw.height=size;
+  const g=raw.getContext('2d'),imageData=g.createImageData(size,size);
+  for(let i=0;i<size*size;i++){
+    const v=gray[i];imageData.data[i*4]=v;imageData.data[i*4+1]=v;imageData.data[i*4+2]=v;imageData.data[i*4+3]=255;
+  }
+  g.putImageData(imageData,0,0);
+  if(!$('flipY').checked)return raw;
+  const out=document.createElement('canvas');out.width=out.height=size;
+  const og=out.getContext('2d');og.imageSmoothingEnabled=false;og.translate(0,size);og.scale(1,-1);og.drawImage(raw,0,0);
+  return out;
+}
+function rasterizeGeoFeatures(kind,size=REF_OUT){
+  const source=geoFeatureSource;if(!source)return null;
+  const features=kind==='roads'?source.roads:source.buildings;if(!Array.isArray(features)||!features.length)return null;
+  const canvas=document.createElement('canvas');canvas.width=canvas.height=size;
+  const context=canvas.getContext('2d',{willReadFrequently:true});if(!context)return null;
+  const widthMeters=terrainWorldDimensions().width,heightMeters=terrainWorldDimensions().height;
+  const cellWidth=widthMeters/Math.max(1,size-1),cellHeight=heightMeters/Math.max(1,size-1);
+  context.fillStyle='#fff';context.strokeStyle='#fff';context.lineCap='round';context.lineJoin='round';
+  if(kind==='roads'){
+    for(const way of features){
+      const geometry=way?.geometry;if(!Array.isArray(geometry)||geometry.length<2)continue;
+      context.lineWidth=Math.max(1,geoRoadWidthMeters(way.tags?.highway)/Math.max(.001,Math.min(cellWidth,cellHeight)));
+      context.beginPath();let points=0;
+      for(const point of geometry){
+        const mapped=geoFeatureExportPoint(point,size);if(!mapped)continue;
+        if(points++)context.lineTo(mapped.x,mapped.y);else context.moveTo(mapped.x,mapped.y);
+      }
+      if(points>=2)context.stroke();
+    }
+  }else{
+    for(const building of features){
+      const geometry=building?.geometry;if(!Array.isArray(geometry)||geometry.length<3)continue;
+      context.beginPath();let points=0;
+      for(const point of geometry){
+        const mapped=geoFeatureExportPoint(point,size);if(!mapped)continue;
+        if(points++)context.lineTo(mapped.x,mapped.y);else context.moveTo(mapped.x,mapped.y);
+      }
+      if(points>=3){context.closePath();context.fill();}
+    }
+  }
+  const pixels=context.getImageData(0,0,size,size).data,gray=new Uint8ClampedArray(size*size);
+  for(let i=0;i<gray.length;i++)gray[i]=pixels[i*4+3];
+  return gray;
+}
+function buildRoadMaskCanvas(){return canvasFromGrayData(rasterizeGeoFeatures('roads')||resampleReferenceMask(geoRoadMask),REF_OUT);}
+function buildBuildingMaskCanvas(){return canvasFromGrayData(rasterizeGeoFeatures('buildings')||resampleReferenceMask(geoBuildingMask),REF_OUT);}
 
 function buildHeightPreviewCanvas(heightData=resampleHeight()){
   const rgb=new Uint8ClampedArray(OUT*OUT*3),sea=+$('pSea').value,peak=Math.max(+$('pPeak').value,visualPeak||0);
@@ -3211,16 +3621,17 @@ function canvasBlob(canvas,type='image/png',quality){
   return new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(Error('canvas export failed')),type,quality));
 }
 function projectData(){
-  return {format:'TERRA GEN SCULPT',version:3,grid:G,settings:{sea:+$('pSea').value,land:+$('pLand').value,peak:+$('pPeak').value,seed:terrainSeed,baseTemplate,islandKind,world:worldSize||8192,terrainAspect,grid:G,exportSize:OUT,previewHeightScale:+$('pHeightScale').value,flipY:!!$('flipY').checked,sandLimit:+$('pSandLimit').value,maskPreview:$('maskPreviewMode').value,maskOpacity:+$('pMaskOpacity').value,showContours:!!$('showContours').checked,geoSource:geoSourceMeta,materialChannels:{r:'rock classification/detail 0 (reserved by current renderer)',g:'ground/detail 1',b:'vegetation/detail 2'},treeSettings:{radius:+$('pTreeRadius').value,density:+$('pTreeDensity').value,patch:+$('pTreePatch').value,seed:forestSeed,showContours:!!$('showTreeContours').checked}},height:arrayToB64(height),mask:arrayToB64(maskRGB),override:arrayToB64(overrideA),treeMask:arrayToB64(treeMask),treeAutoMask:arrayToB64(treeAutoMask),treeMaterialOverride:arrayToB64(treeMaterialOverrideA)};
+  return {format:'TERRA GEN SCULPT',version:5,grid:G,settings:{sea:+$('pSea').value,land:+$('pLand').value,peak:+$('pPeak').value,seed:terrainSeed,baseTemplate,islandKind,world:worldSize||8192,terrainAspect,grid:G,exportSize:OUT,referenceMaskSize:REF_OUT,previewHeightScale:+$('pHeightScale').value,flipY:!!$('flipY').checked,sandLimit:+$('pSandLimit').value,maskPreview:$('maskPreviewMode').value,maskOpacity:+$('pMaskOpacity').value,showContours:!!$('showContours').checked,geoSource:geoSourceMeta,materialChannels:{r:'rock classification/detail 0 (reserved by current renderer)',g:'ground/detail 1',b:'vegetation/detail 2'},treeSettings:{radius:+$('pTreeRadius').value,density:+$('pTreeDensity').value,patch:+$('pTreePatch').value,seed:forestSeed,showContours:!!$('showTreeContours').checked}},geoFeatures:geoFeatureSource,height:arrayToB64(height),mask:arrayToB64(maskRGB),override:arrayToB64(overrideA),treeMask:arrayToB64(treeMask),treeAutoMask:arrayToB64(treeAutoMask),treeMaterialOverride:arrayToB64(treeMaterialOverrideA),roadMask:arrayToB64(geoRoadMask),buildingMask:arrayToB64(geoBuildingMask)};
 }
 function metasiberiaManifest(){
   const dims=terrainWorldDimensions();
   return {
     format:'TERRA GEN → METASIBERIA',version:1,
-    files:{height:'terra_gen_height.exr',materialMask:'terra_gen_material_mask.png',treeMask:'terra_gen_tree_mask.png'},
+    files:{height:'terra_gen_height.exr',materialMask:'terra_gen_material_mask.png',treeMask:'terra_gen_tree_mask.png',roadMask:'terra_gen_roads_mask.png',buildingMask:'terra_gen_buildings_mask.png'},
     section:{x:0,y:0,widthMeters:worldSize||8192,contentWidthMeters:Math.round(dims.width),contentHeightMeters:Math.round(dims.height),rectangularContentPaddedToSquare:Math.abs(terrainAspect-1)>1e-6},
     terrainHeightScale:1,defaultTerrainZ:+$('pSea').value,waterZ:0,waterEnabled:true,
     raster:{width:OUT,height:OUT,flipY:!!$('flipY').checked,sculptGrid:G,metasiberiaScatteringCompatible:OUT===1024},
+    referenceRaster:{width:REF_OUT,height:REF_OUT,source:'OSM vectors rasterized at export resolution',independentFromTerrainRaster:true},
     treeRule:'tree mask >= 128 AND material B >= 128',
     currentMaterialRenderer:{detail1:'base ground/sediment',detail2:'vegetation selected by B',detail0:'colour not rendered separately',detailHeight0:'optional rock micro-height used on R-classified terrain',detail3:'not rendered'}
   };
@@ -3233,6 +3644,8 @@ function metasiberiaWorldSettingsText(manifest=metasiberiaManifest()){
     'Height map URL / URL карты высот: '+manifest.files.height,
     'Mask map URL / URL карты маски: '+manifest.files.materialMask,
     'Tree mask URL / URL карты маски деревьев: '+manifest.files.treeMask,
+    'Road reference mask / Справочная маска дорог: '+manifest.files.roadMask,
+    'Building reference mask / Справочная маска домов: '+manifest.files.buildingMask,
     'Terrain section width / Ширина секции рельефа: '+manifest.section.widthMeters+' m',
     'Terrain height scale / Масштаб высоты рельефа: 1.0',
     'Default terrain z / Базовая высота вне секции: '+manifest.defaultTerrainZ+' m',
@@ -3240,6 +3653,7 @@ function metasiberiaWorldSettingsText(manifest=metasiberiaManifest()){
     'Water / Вода: enabled / включена','',
     'Content / Содержимое: '+manifest.section.contentWidthMeters+' × '+manifest.section.contentHeightMeters+' m'+(manifest.section.rectangularContentPaddedToSquare?' (centred in square seabed padding / вписано в квадрат с полями морского дна)':''),
     'Raster / Растр: '+manifest.raster.width+' × '+manifest.raster.height+' px; flip Y '+(manifest.raster.flipY?'ON':'OFF'),
+    'Road/building reference raster / Растр дорог и домов: '+manifest.referenceRaster.width+' × '+manifest.referenceRaster.height+' px (independent from terrain raster / отдельно от рельефа)',
     ...(manifest.raster.metasiberiaScatteringCompatible?[]:['WARNING / ВНИМАНИЕ: current Metasiberia scattering expects 1024 × 1024.']),
     'Sculpt grid / Сетка скульпта: '+manifest.raster.sculptGrid+'² (authoring only / только редактирование)','',
     'Required detail colour 1: base ground/sediment texture / основной грунт, осадок.',
@@ -3282,6 +3696,18 @@ $('exportTrees').onclick=()=>exportCanvasFile(
   'tree mask exported · white trees · black no trees'
 );
 
+$('exportRoads').onclick=()=>exportCanvasFile(
+  buildRoadMaskCanvas(),
+  'terra_gen_roads_mask.png',
+  'roads mask exported · grayscale reference mask'
+);
+
+$('exportBuildings').onclick=()=>exportCanvasFile(
+  buildBuildingMaskCanvas(),
+  'terra_gen_buildings_mask.png',
+  'buildings mask exported · grayscale reference mask'
+);
+
 $('exportHeightPNG').onclick=()=>exportCanvasFile(
   buildHeightPreviewCanvas(),
   'terra_gen_height_preview.png',
@@ -3307,6 +3733,8 @@ $('exportBundle').onclick=async()=>{
     zip.file('terra_gen_height.exr',writeEXR(hf,$('flipY').checked));
     zip.file('terra_gen_material_mask.png',await canvasBlob(buildMaterialMaskCanvas(materialData)));
     zip.file('terra_gen_tree_mask.png',await canvasBlob(buildTreeMaskCanvas(materialData)));
+    zip.file('terra_gen_roads_mask.png',await canvasBlob(buildRoadMaskCanvas()));
+    zip.file('terra_gen_buildings_mask.png',await canvasBlob(buildBuildingMaskCanvas()));
     zip.file('terra_gen_height_preview.png',await canvasBlob(buildHeightPreviewCanvas(hf)));
     zip.file('terra_gen_project.json',JSON.stringify(projectData()));
     zip.file('metasiberia_manifest.json',JSON.stringify(manifest,null,2));
@@ -3316,6 +3744,9 @@ $('exportBundle').onclick=async()=>{
       'terra_gen_height.exr → URL карты высот',
       'terra_gen_material_mask.png → URL карты маски',
       'terra_gen_tree_mask.png → URL карты маски деревьев','',
+      'terra_gen_roads_mask.png → roads reference mask / справочная маска дорог',
+      'terra_gen_buildings_mask.png → building reference mask / справочная маска зданий','',
+      'Road/building masks are independent reference images. They do not alter EXR and do not create parcels automatically.','',
       'Material mask channels:',
       'R = rock classification / классификация камня (current renderer reserves detail 0)',
       'G = detail 1 = base ground, sediment, sand / основной грунт, осадок, песок',
@@ -3332,28 +3763,31 @@ $('exportBundle').onclick=async()=>{
       'Terrain content: '+Math.round(terrainWorldDimensions().width)+' × '+Math.round(terrainWorldDimensions().height)+' m (rectangular content is padded, never stretched)',
       'Metasiberia terrain height scale: 1.0',
       geoSourceMeta?'Real terrain source: '+geoSourceMeta.provider+' · mapping '+geoSourceMeta.mapping:'Real terrain source: none',
-      'Heightmap, material mask and tree mask: '+OUT+' × '+OUT+' px',
+      'Heightmap, material and tree masks: '+OUT+' × '+OUT+' px',
+      'Road and building reference masks: '+REF_OUT+' × '+REF_OUT+' px (rasterized from OSM vectors)',
       '',
       'See METASIBERIA_WORLD_SETTINGS.txt for exact client fields.'
     ].join('\n'));
     const blob=await zip.generateAsync({type:'blob',compression:'DEFLATE',compressionOptions:{level:6}});
     download('terra_gen_export.zip',blob);
-    $('status').textContent='ZIP exported · EXR + materials + trees + preview + project + README';
+    $('status').textContent='ZIP exported · EXR + materials + trees + roads + buildings + preview + project + README';
   }catch(err){
     console.error(err);$('status').textContent='ZIP export failed · '+err.message;
   }finally{btn.disabled=false;}
 };
 $('loadProject').onclick=()=>$('projectFile').click();
-$('projectFile').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{const d=JSON.parse(t);if(!['TERRA GEN SCULPT','TERRA/FORGE SCULPT'].includes(d.format))throw Error('incompatible project'); if(d.grid&&d.grid!==G){ if($('pResolution'))$('pResolution').value=String(d.grid); G=d.grid; height=new Float32Array(G*G); autoRGB=new Uint8ClampedArray(G*G*3); maskRGB=new Uint8ClampedArray(G*G*3); overrideA=new Uint8ClampedArray(G*G); treeMask=new Uint8ClampedArray(G*G); treeAutoMask=new Uint8ClampedArray(G*G); treeMaterialOverrideA=new Uint8ClampedArray(G*G); display=ctx.createImageData(G,G); }snapshot();height=b64ToArray(d.height,Float32Array);maskRGB=b64ToArray(d.mask,Uint8ClampedArray);overrideA=b64ToArray(d.override,Uint8ClampedArray);treeMask=d.treeMask?normalizeTreeMask(b64ToArray(d.treeMask,Uint8ClampedArray)):new Uint8ClampedArray(G*G);treeAutoMask=d.treeAutoMask?b64ToArray(d.treeAutoMask,Uint8ClampedArray):buildAutomaticForestMask();treeMaterialOverrideA=d.treeMaterialOverride?b64ToArray(d.treeMaterialOverride,Uint8ClampedArray):new Uint8ClampedArray(G*G);$('pSea').value=d.settings.sea;$('pLand').value=d.settings.land;$('pPeak').value=d.settings.peak;
+$('projectFile').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{const d=JSON.parse(t);if(!['TERRA GEN SCULPT','TERRA/FORGE SCULPT'].includes(d.format))throw Error('incompatible project'); if(d.grid&&d.grid!==G){ if($('pResolution'))$('pResolution').value=String(d.grid); G=d.grid; height=new Float32Array(G*G); autoRGB=new Uint8ClampedArray(G*G*3); maskRGB=new Uint8ClampedArray(G*G*3); overrideA=new Uint8ClampedArray(G*G); treeMask=new Uint8ClampedArray(G*G); treeAutoMask=new Uint8ClampedArray(G*G); treeMaterialOverrideA=new Uint8ClampedArray(G*G); geoRoadMask=new Uint8ClampedArray(G*G); geoBuildingMask=new Uint8ClampedArray(G*G); display=ctx.createImageData(G,G); }snapshot();height=b64ToArray(d.height,Float32Array);maskRGB=b64ToArray(d.mask,Uint8ClampedArray);overrideA=b64ToArray(d.override,Uint8ClampedArray);treeMask=d.treeMask?normalizeTreeMask(b64ToArray(d.treeMask,Uint8ClampedArray)):new Uint8ClampedArray(G*G);treeAutoMask=d.treeAutoMask?b64ToArray(d.treeAutoMask,Uint8ClampedArray):buildAutomaticForestMask();treeMaterialOverrideA=d.treeMaterialOverride?b64ToArray(d.treeMaterialOverride,Uint8ClampedArray):new Uint8ClampedArray(G*G);geoRoadMask=d.roadMask?b64ToArray(d.roadMask,Uint8ClampedArray):new Uint8ClampedArray(G*G);geoBuildingMask=d.buildingMask?b64ToArray(d.buildingMask,Uint8ClampedArray):new Uint8ClampedArray(G*G);$('pSea').value=d.settings.sea;$('pLand').value=d.settings.land;$('pPeak').value=d.settings.peak;
   refreshVisualPeak();
   if(Number.isFinite(d.settings.seed)){terrainSeed=d.settings.seed;$('pSeed').value=terrainSeed;}
   if(d.settings.baseTemplate){baseTemplate=d.settings.baseTemplate;document.querySelectorAll('[data-template]').forEach(b=>b.classList.toggle('primary',b.dataset.template===baseTemplate));}
   if(d.settings.islandKind) setIslandKind(d.settings.islandKind, false);
   geoSourceMeta=d.settings.geoSource||null;
+  geoFeatureSource=d.geoFeatures||null;
   setTerrainAspect(Number.isFinite(d.settings.terrainAspect)?d.settings.terrainAspect:(geoSourceMeta&&Number.isFinite(geoSourceMeta.aspect)?geoSourceMeta.aspect:1));
 
   if(Number.isFinite(d.settings.world)){worldSize=d.settings.world;if($('pWorldSize'))$('pWorldSize').value=String(worldSize);}
   if(Number.isFinite(d.settings.exportSize)){OUT=d.settings.exportSize;if($('pExportSize'))$('pExportSize').value=String(OUT);}
+  if(Number.isFinite(d.settings.referenceMaskSize)){REF_OUT=clamp(d.settings.referenceMaskSize,1024,4096);if($('pReferenceMaskSize'))$('pReferenceMaskSize').value=String(REF_OUT);}
   if(Number.isFinite(d.settings.previewHeightScale))$('pHeightScale').value=d.settings.previewHeightScale;
   else if(d.settings.heightScale)$('pHeightScale').value=d.settings.heightScale;
   else if(d.settings.previewScale)$('pHeightScale').value=Math.max(100,d.settings.previewScale);
@@ -3449,13 +3883,13 @@ function updateToolTip(name){
 }
 function updateMapSizeInfo(){
   const m=worldSize||8192,g=G,out=OUT,dims=terrainWorldDimensions(),width=Math.round(dims.width),heightMeters=Math.round(dims.height);
-  const cellX=(dims.width/g).toFixed(1),cellY=(dims.height/g).toFixed(1);
+  const cellX=(dims.width/g).toFixed(1),cellY=(dims.height/g).toFixed(1),exportCellX=(dims.width/out).toFixed(1),exportCellY=(dims.height/out).toFixed(1),referenceCellX=(dims.width/REF_OUT).toFixed(1),referenceCellY=(dims.height/REF_OUT).toFixed(1);
   const ru=(store.getItem('terra-gen-lang')||'en')==='ru';
   const exportNote=out===1024?(ru?'совместимо с рассеиванием Metasiberia':'Metasiberia scattering compatible'):(ru?'экспериментально: рассеивание клиента рассчитано на 1024 px':'experimental: client scattering expects 1024 px');
   const el=$('mapSizeInfo');
   if(el) el.textContent=ru
-    ? ('Содержимое: '+width+' × '+heightMeters+' м · квадратная секция Metasiberia: '+m+' м · сетка '+g+'×'+g+' · экспорт '+out+'×'+out+' px ('+exportNote+') · ячейка ~'+cellX+' × '+cellY+' м')
-    : ('Content: '+width+' × '+heightMeters+' m · Metasiberia square section: '+m+' m · grid '+g+'×'+g+' · export '+out+'×'+out+' px ('+exportNote+') · cell ~'+cellX+' × '+cellY+' m');
+    ? ('Содержимое: '+width+' × '+heightMeters+' м · квадратная секция Metasiberia: '+m+' м · сетка '+g+'×'+g+' · экспорт '+out+'×'+out+' px ('+exportNote+') · пиксель масок дорог/домов '+REF_OUT+'×'+REF_OUT+' ~'+referenceCellX+' × '+referenceCellY+' м · ячейка скульпта ~'+cellX+' × '+cellY+' м · пиксель экспорта ~'+exportCellX+' × '+exportCellY+' м')
+    : ('Content: '+width+' × '+heightMeters+' m · Metasiberia square section: '+m+' m · grid '+g+'×'+g+' · export '+out+'×'+out+' px ('+exportNote+') · road/building masks '+REF_OUT+'×'+REF_OUT+' ~'+referenceCellX+' × '+referenceCellY+' m/px · sculpt cell ~'+cellX+' × '+cellY+' m · export pixel ~'+exportCellX+' × '+exportCellY+' m');
   const h3=$('hud3dWorld'); if(h3) h3.textContent=width+' × '+heightMeters;
   const ft=$('footerSize');
   if(ft) ft.textContent=ru
@@ -3487,7 +3921,10 @@ function selectTool(name){
   tool=name;
   document.querySelectorAll('#heightTools [data-tool]').forEach(x=>x.classList.toggle('on',x===btn));
   updateSculptCurrent(name);
-  mode='height'; if(typeof show2d==='function') show2d('height');
+  const keep3d=mode==='3d'||$('tab3d')?.classList.contains('on');
+  mode=keep3d?'3d':'height';
+  if(!keep3d&&typeof show2d==='function') show2d('height');
+  if(keep3d){dirtyPreview3d=true;update3d();}
   if(typeof syncTerrainContext==='function') syncTerrainContext();
   else setTimeout(()=>{ try{syncTerrainContext()}catch(e){} },0);
   if($('status'))$('status').textContent='tool · '+toolTitle(name);
@@ -3526,7 +3963,7 @@ if($('pWorldSize')){
 function resizeGrid(newG){
   newG=+newG|0; if(newG===G||newG<64||newG>1024) return;
   snapshot();
-  const oldG=G, oldH=new Float32Array(height), oldM=new Uint8ClampedArray(maskRGB), oldO=new Uint8ClampedArray(overrideA), oldT=new Uint8ClampedArray(treeMask), oldTM=new Uint8ClampedArray(treeMaterialOverrideA);
+  const oldG=G, oldH=new Float32Array(height), oldM=new Uint8ClampedArray(maskRGB), oldO=new Uint8ClampedArray(overrideA), oldT=new Uint8ClampedArray(treeMask), oldTM=new Uint8ClampedArray(treeMaterialOverrideA), oldRoads=new Uint8ClampedArray(geoRoadMask), oldBuildings=new Uint8ClampedArray(geoBuildingMask);
   G=newG;
   height=new Float32Array(G*G);
   autoRGB=new Uint8ClampedArray(G*G*3);
@@ -3535,6 +3972,8 @@ function resizeGrid(newG){
   treeMask=new Uint8ClampedArray(G*G);
   treeAutoMask=new Uint8ClampedArray(G*G);
   treeMaterialOverrideA=new Uint8ClampedArray(G*G);
+  geoRoadMask=new Uint8ClampedArray(G*G);
+  geoBuildingMask=new Uint8ClampedArray(G*G);
   for(let y=0;y<G;y++)for(let x=0;x<G;x++){
     const ox=x/(G-1)*(oldG-1), oy=y/(G-1)*(oldG-1);
     const nearestX=clamp(Math.round(ox),0,oldG-1),nearestY=clamp(Math.round(oy),0,oldG-1),nearestI=nearestY*oldG+nearestX;
@@ -3546,6 +3985,8 @@ function resizeGrid(newG){
     overrideA[y*G+x]=oldO[nearestI]?255:0;
     treeMask[y*G+x]=oldT[nearestI];
     treeMaterialOverrideA[y*G+x]=oldTM[nearestI]?255:0;
+    geoRoadMask[y*G+x]=oldRoads[nearestI];
+    geoBuildingMask[y*G+x]=oldBuildings[nearestI];
   }
   // display buffer
   try{ display=ctx.createImageData(G,G); }catch(e){}
@@ -3607,6 +4048,13 @@ if($('pExportSize')){
     if($('status'))$('status').textContent='export resolution '+OUT+' × '+OUT+' px';
   });
 }
+if($('pReferenceMaskSize')){
+  $('pReferenceMaskSize').value=String(REF_OUT);
+  $('pReferenceMaskSize').addEventListener('change',()=>{
+    REF_OUT=clamp(+$('pReferenceMaskSize').value||2048,1024,4096);
+    if($('status'))$('status').textContent='road/building mask resolution '+REF_OUT+' × '+REF_OUT+' px';
+  });
+}
 if($('pWorldSize')){
   $('pWorldSize').value=String(worldSize);
 }
@@ -3654,7 +4102,11 @@ refreshPresetList();
 (function(){
   function syncTerrainContext(){
     const current=document.getElementById('tab3d')?.classList.contains('on')?'3d':document.getElementById('tabMap')?.classList.contains('on')?'map':document.getElementById('tabTrees')?.classList.contains('on')?'trees':document.getElementById('tabMask')?.classList.contains('on')?'mask':'height';
-    document.querySelectorAll('.context-height').forEach(el=>el.style.display=current==='height'?'block':'none');
+    const sculpt3d=document.getElementById('sculpt3dToggle')?.checked;
+    document.querySelectorAll('.context-height').forEach(el=>{
+      const show=current==='height'||(current==='3d'&&sculpt3d&&el.id==='heightSettings');
+      el.style.display=show?'block':'none';
+    });
     document.querySelectorAll('.context-mask').forEach(el=>el.style.display=current==='mask'?'block':'none');
     document.querySelectorAll('.context-trees').forEach(el=>el.style.display=current==='trees'?'block':'none');
     document.querySelectorAll('.context-3d').forEach(el=>el.style.display=current==='3d'?'block':'none');
@@ -3981,7 +4433,17 @@ refreshPresetList();
   Object.assign(RU,{
     "1024 × 1024 — Metasiberia":"1024 × 1024 — Metasiberia",
     "2048 × 2048 — terrain only (experimental)":"2048 × 2048 — только террейн (экспериментально)",
+    "road/building mask resolution (px)":"разрешение масок дорог и домов (px)",
+    "1024 × 1024 — compatible":"1024 × 1024 — совместимо",
+    "2048 × 2048 — high detail":"2048 × 2048 — высокая детализация",
+    "4096 × 4096 — very high detail":"4096 × 4096 — очень высокая детализация",
     "3D preview height exaggeration":"преувеличение высоты 3D-превью",
+    "Sculpt cell ~":"Ячейка скульпта ~",
+    "export pixel ~":"пиксель экспорта ~",
+    "sculpt cell ~":"ячейка скульпта ~",
+    "export pixel ~":"пиксель экспорта ~",
+    "Content:":"Содержимое:",
+    "Roads and building footprints are rasterized from the original OSM vectors at their own resolution. Keep terrain export at 1024 for current Metasiberia compatibility; use 2048 or 4096 for sharper reference masks.":"Дороги и контуры домов растеризуются из исходных OSM-векторов в собственном разрешении. Для совместимости с текущей Metasiberia оставьте экспорт рельефа 1024; для более чётких справочных масок используйте 2048 или 4096.",
     "Preview only. EXR already stores meters, so Metasiberia terrain height scale must be 1.0.":"Только предпросмотр. EXR уже хранит метры, поэтому масштаб высоты рельефа в Metasiberia должен быть 1.0.",
     "Current Metasiberia renders detail 1 as ground and B/detail 2 as vegetation; R/detail 0 and detail 3 are not rendered separately yet. Tree mask is opaque: white = trees and B vegetation, black = no trees.":"Текущая Metasiberia отображает detail 1 как грунт, а B/detail 2 как растительность; R/detail 0 и detail 3 пока не рендерятся отдельно. Маска деревьев непрозрачна: белое = деревья и растительность B, чёрное = без деревьев.",
     "trees forbidden":"деревья запрещены",
@@ -4014,7 +4476,7 @@ refreshPresetList();
     "automatic mask regenerated":"автоматическая маска пересоздана","Substrata material mask rebuilt by height and slope":"маска материалов Substrata пересоздана по высоте и уклону",
     "manual tree edits cleared":"ручные правки деревьев очищены","tree mask regenerated":"маска деревьев пересоздана","resampling":"пересчёт","heightfield":"карты высот",
     "EXR exported":"EXR экспортирован","terrain · use":"террейн · используйте","height scale in Substrata":"масштаб высоты в Substrata","material mask exported":"маска материалов экспортирована",
-    "tree mask exported":"маска деревьев экспортирована","height preview exported":"превью высот экспортировано","export failed":"ошибка экспорта","ZIP library unavailable":"библиотека ZIP недоступна",
+    "tree mask exported":"маска деревьев экспортирована","roads mask exported":"маска дорог экспортирована","buildings mask exported":"маска домов экспортирована","height preview exported":"превью высот экспортировано","export failed":"ошибка экспорта","ZIP library unavailable":"библиотека ZIP недоступна",
     "building ZIP package":"создание ZIP-пакета","ZIP exported":"ZIP экспортирован","ZIP export failed":"ошибка экспорта ZIP","project loaded":"проект загружен","load failed":"ошибка загрузки",
     "tool ·":"инструмент ·","world size":"размер мира","resolution":"разрешение","symmetry":"симметрия","Preset":"Пресет","preset saved":"пресет сохранён","preset loaded":"пресет загружен","export resolution":"разрешение экспорта",
     "Metasiberia: R = detail 0 (rock), G = detail 1 (sediment/sand), B = detail 2 (vegetation). Every mask pixel is normalized so the channel sum equals 255. Trees are controlled by a separate black-and-white PNG mask.":"Metasiberia: R = detail 0 (камень), G = detail 1 (осадок/песок), B = detail 2 (растительность). Каждый пиксель маски нормализуется: сумма каналов равна 255. Деревья управляются отдельной чёрно-белой PNG-маской."
@@ -4065,8 +4527,9 @@ refreshPresetList();
     "Map layers:":"Слои карты:","Search:":"Поиск:","Searching…":"Поиск…","Nothing found.":"Ничего не найдено.","results":"результатов",
     "Map centered on ·":"Карта перемещена к ·","Search failed ·":"Ошибка поиска ·","Map result":"Результат поиска","map view ·":"вид карты ·"
   });
+  Object.assign(RU,{"LOAD ROADS":"ЗАГРУЗИТЬ ДОРОГИ","LOAD BUILDINGS":"ЗАГРУЗИТЬ ДОМА","ROADS":"ДОРОГИ","BUILDINGS":"ДОМА","SCULPT IN 3D":"СКУЛЬПТИНГ В 3D","OPEN SCULPT TOOLS":"ОТКРЫТЬ ИНСТРУМЕНТЫ СКУЛЬПТА","When enabled: left drag sculpts, Alt + left drag rotates, right/middle drag pans, wheel zooms.":"Включено: левая кнопка скульптит, Alt + левая кнопка вращает, правая/средняя кнопка перемещает, колесо масштабирует.","Roads and buildings are independent reference masks. They do not alter the EXR or create parcels automatically.":"Дороги и дома — отдельные справочные маски. Они не изменяют EXR и не создают парсели автоматически.","roads mask exported · grayscale reference mask":"маска дорог экспортирована · справочная маска в градациях серого","buildings mask exported · grayscale reference mask":"маска домов экспортирована · справочная маска в градациях серого","ZIP exported · EXR + materials + trees + roads + buildings + preview + project + README":"ZIP экспортирован · EXR + материалы + деревья + дороги + дома + превью + проект + README"});
   const EN=Object.fromEntries(Object.entries(RU).map(([k,v])=>[v,k]));
-  const ID_TIPS_EN={"lang_en": "Switch interface to English", "lang_ru": "Переключить интерфейс на русский язык", "tabHeight": "Edit terrain height with sculpting tools", "tabMask": "Edit the RGB material distribution mask", "tabTrees": "Edit areas where trees are allowed or forbidden", "tabMap": "Open a real-world map and select terrain to import", "tab3d": "Open the interactive 3D terrain preview", "undoTop": "Undo the last terrain, material, or tree edit", "redoTop": "Redo the last undone edit", "zoomOut2d": "Zoom out of the 2D map", "zoomIn2d": "Zoom into the 2D map", "resetView": "Reset the current 2D or 3D view", "saveProject": "Save the editable Terrain Gen project as JSON", "loadProject": "Load a previously saved Terrain Gen project", "exportEXR": "Export the floating-point EXR heightmap", "exportMask": "Export the RGB material mask PNG", "exportTrees": "Export the black-and-white tree permission mask PNG", "exportBundle": "Export EXR, masks, preview, project, and README in one ZIP", "btnRandomize": "Choose a new random terrain seed and regenerate", "btnRegenBase": "Regenerate the selected base terrain using the current settings", "btnErode": "Apply an erosion pass to the entire terrain", "btnTerraces": "Quantize terrain heights into terraces", "btnDunes": "Add dune-like relief to suitable low areas", "btnNoisePass": "Add procedural fine detail across the terrain", "btnMirrorH": "Mirror the full project horizontally", "btnMirrorV": "Mirror the full project vertically", "btnImportHeight": "Replace the terrain with an imported grayscale image", "symMirrorX": "Mirror each sculpt stroke across the vertical map axis", "symMirrorY": "Mirror each sculpt stroke across the horizontal map axis", "symRadial": "Repeat each sculpt stroke four times around the map center", "presetSave": "Save the sculpt brush settings as a preset", "presetLoad": "Load the selected sculpt brush preset", "regenMask": "Rebuild the automatic material mask from terrain height and slope", "slopeAuto": "Assign materials automatically using height and steepness", "treeGenerateAuto": "Generate a new natural distribution of forest patches", "treeResetAuto": "Remove all manual tree edits and return to the automatic mask", "exportHeightPNG": "Export a grayscale PNG preview of the heightmap", "pSea": "Set the minimum seabed elevation", "pLand": "Set the base elevation of generated land", "pPeak": "Set the maximum generated and sculpted height", "pSeed": "Set the procedural terrain seed", "pPass": "Set the strength of global post-processing passes", "pWorldSize": "Choose the square Metasiberia section width in meters", "pResolution": "Choose the internal sculpting grid resolution", "pExportSize": "Choose raster resolution; 1024 is the current Metasiberia-compatible value", "pRadius": "Set the sculpt brush radius", "pStrength": "Set the sculpt brush strength in meters", "pSharp": "Set the sharpness of the mountain ridge profile", "pLow": "Set the target elevation for level-based sculpt tools", "autoMask": "Automatically update unpainted material regions after sculpting", "pMaskRadius": "Set the material painting brush radius", "maskLandOnly": "Restrict material painting to land", "maskSeaOnly": "Restrict material painting to sea", "maskPreviewMode": "Choose how the material mask is displayed", "pMaskOpacity": "Set material overlay opacity", "showContours": "Show height contour lines every 20 meters", "pSandLimit": "Set the height threshold used for sediment and beach material", "pTreeRadius": "Set the tree-mask brush radius", "pTreeDensity": "Set the amount of land covered by generated forest", "pTreePatch": "Set the average size and continuity of forest patches", "pHeightScale": "Change only the vertical scale of the 3D preview", "flipY": "Flip all exported maps vertically for Substrata or Metasiberia orientation compatibility", "projectFile": "Choose a Terrain Gen project file", "heightmapFile": "Choose a grayscale image to import as terrain height"};
+  const ID_TIPS_EN={"lang_en": "Switch interface to English", "lang_ru": "Переключить интерфейс на русский язык", "tabHeight": "Edit terrain height with sculpting tools", "tabMask": "Edit the RGB material distribution mask", "tabTrees": "Edit areas where trees are allowed or forbidden", "tabMap": "Open a real-world map and select terrain to import", "tab3d": "Open the interactive 3D terrain preview", "undoTop": "Undo the last terrain, material, or tree edit", "redoTop": "Redo the last undone edit", "zoomOut2d": "Zoom out of the 2D map", "zoomIn2d": "Zoom into the 2D map", "resetView": "Reset the current 2D or 3D view", "saveProject": "Save the editable Terrain Gen project as JSON", "loadProject": "Load a previously saved Terrain Gen project", "exportEXR": "Export the floating-point EXR heightmap", "exportMask": "Export the RGB material mask PNG", "exportTrees": "Export the black-and-white tree permission mask PNG", "exportBundle": "Export EXR, masks, preview, project, and README in one ZIP", "btnRandomize": "Choose a new random terrain seed and regenerate", "btnRegenBase": "Regenerate the selected base terrain using the current settings", "btnErode": "Apply an erosion pass to the entire terrain", "btnTerraces": "Quantize terrain heights into terraces", "btnDunes": "Add dune-like relief to suitable low areas", "btnNoisePass": "Add procedural fine detail across the terrain", "btnMirrorH": "Mirror the full project horizontally", "btnMirrorV": "Mirror the full project vertically", "btnImportHeight": "Replace the terrain with an imported grayscale image", "symMirrorX": "Mirror each sculpt stroke across the vertical map axis", "symMirrorY": "Mirror each sculpt stroke across the horizontal map axis", "symRadial": "Repeat each sculpt stroke four times around the map center", "presetSave": "Save the sculpt brush settings as a preset", "presetLoad": "Load the selected sculpt brush preset", "regenMask": "Rebuild the automatic material mask from terrain height and slope", "slopeAuto": "Assign materials automatically using height and steepness", "treeGenerateAuto": "Generate a new natural distribution of forest patches", "treeResetAuto": "Remove all manual tree edits and return to the automatic mask", "exportHeightPNG": "Export a grayscale PNG preview of the heightmap", "pSea": "Set the minimum seabed elevation", "pLand": "Set the base elevation of generated land", "pPeak": "Set the maximum generated and sculpted height", "pSeed": "Set the procedural terrain seed", "pPass": "Set the strength of global post-processing passes", "pWorldSize": "Choose the square Metasiberia section width in meters", "pResolution": "Choose the internal sculpting grid resolution", "pExportSize": "Choose raster resolution; 1024 is the current Metasiberia-compatible value", "pReferenceMaskSize": "Choose the independent road and building mask resolution; 2048 or 4096 gives sharper reference layers", "pRadius": "Set the sculpt brush radius", "pStrength": "Set the sculpt brush strength in meters", "pSharp": "Set the sharpness of the mountain ridge profile", "pLow": "Set the target elevation for level-based sculpt tools", "autoMask": "Automatically update unpainted material regions after sculpting", "pMaskRadius": "Set the material painting brush radius", "maskLandOnly": "Restrict material painting to land", "maskSeaOnly": "Restrict material painting to sea", "maskPreviewMode": "Choose how the material mask is displayed", "pMaskOpacity": "Set material overlay opacity", "showContours": "Show height contour lines every 20 meters", "pSandLimit": "Set the height threshold used for sediment and beach material", "pTreeRadius": "Set the tree-mask brush radius", "pTreeDensity": "Set the amount of land covered by generated forest", "pTreePatch": "Set the average size and continuity of forest patches", "pHeightScale": "Change only the vertical scale of the 3D preview", "flipY": "Flip all exported maps vertically for Substrata or Metasiberia orientation compatibility", "projectFile": "Choose a Terrain Gen project file", "heightmapFile": "Choose a grayscale image to import as terrain height"};
   const ID_TIPS_RU={"lang_en": "Переключить интерфейс на английский язык", "lang_ru": "Переключить интерфейс на русский язык", "tabHeight": "Редактировать высоту террейна инструментами скульпта", "tabMask": "Редактировать RGB-маску распределения материалов", "tabTrees": "Редактировать области, где деревья разрешены или запрещены", "tab3d": "Открыть интерактивное 3D-превью террейна", "undoTop": "Отменить последнее изменение рельефа, материалов или деревьев", "redoTop": "Повторить последнее отменённое изменение", "zoomOut2d": "Уменьшить масштаб 2D-карты", "zoomIn2d": "Увеличить масштаб 2D-карты", "resetView": "Сбросить текущий 2D- или 3D-вид", "saveProject": "Сохранить редактируемый проект Terrain Gen в JSON", "loadProject": "Загрузить ранее сохранённый проект Terrain Gen", "exportEXR": "Экспортировать карту высот EXR с плавающей точкой", "exportMask": "Экспортировать RGB-маску материалов PNG", "exportTrees": "Экспортировать чёрно-белую маску разрешения деревьев PNG", "exportBundle": "Экспортировать EXR, маски, превью, проект и README одним ZIP-архивом", "btnRandomize": "Выбрать новый случайный seed и перегенерировать террейн", "btnRegenBase": "Перегенерировать выбранный базовый террейн с текущими настройками", "btnErode": "Применить эрозию ко всему рельефу", "btnTerraces": "Преобразовать высоты рельефа в террасы", "btnDunes": "Добавить дюнообразный рельеф на подходящих низких участках", "btnNoisePass": "Добавить процедурные мелкие детали по всему рельефу", "btnMirrorH": "Отразить весь проект по горизонтали", "btnMirrorV": "Отразить весь проект по вертикали", "btnImportHeight": "Заменить террейн импортированным изображением в градациях серого", "symMirrorX": "Отражать каждый штрих скульпта относительно вертикальной оси карты", "symMirrorY": "Отражать каждый штрих скульпта относительно горизонтальной оси карты", "symRadial": "Повторять каждый штрих четыре раза вокруг центра карты", "presetSave": "Сохранить текущие настройки кисти как пресет", "presetLoad": "Загрузить выбранный пресет кисти", "regenMask": "Пересобрать автоматическую маску материалов по высоте и уклону", "slopeAuto": "Автоматически назначить материалы по высоте и крутизне", "treeGenerateAuto": "Создать новое естественное распределение лесных массивов", "treeResetAuto": "Удалить все ручные правки деревьев и вернуть автоматическую маску", "exportHeightPNG": "Экспортировать чёрно-белое PNG-превью карты высот", "pSea": "Задать минимальную высоту морского дна", "pLand": "Задать базовую высоту генерируемой суши", "pPeak": "Задать максимальную высоту генерации и скульпта", "pSeed": "Задать seed процедурной генерации террейна", "pPass": "Задать силу глобальных постпроходов", "pWorldSize": "Выбрать физическую ширину и глубину террейна в метрах", "pResolution": "Выбрать внутреннее разрешение сетки скульпта", "pExportSize": "Выбрать разрешение всех экспортируемых карт в пикселях", "pRadius": "Задать радиус кисти скульпта", "pStrength": "Задать силу кисти скульпта в метрах", "pSharp": "Задать остроту профиля горного хребта", "pLow": "Задать целевую высоту для уровневых инструментов", "autoMask": "Автоматически обновлять незакрашенные области маски материалов после скульпта", "pMaskRadius": "Задать радиус кисти материалов", "maskLandOnly": "Ограничить рисование материалов только сушей", "maskSeaOnly": "Ограничить рисование материалов только морем", "maskPreviewMode": "Выбрать режим отображения маски материалов", "pMaskOpacity": "Задать прозрачность наложения материалов", "showContours": "Показывать линии высот через каждые 20 метров", "pSandLimit": "Задать высотный порог для осадка и пляжа", "pTreeRadius": "Задать радиус кисти маски деревьев", "pTreeDensity": "Задать долю суши, покрываемую сгенерированным лесом", "pTreePatch": "Задать средний размер и связность лесных массивов", "pHeightScale": "Изменить только вертикальный масштаб 3D-превью", "flipY": "Отразить все экспортируемые карты по вертикали для совместимости ориентации Substrata или Metasiberia", "projectFile": "Выбрать файл проекта Terrain Gen", "heightmapFile": "Выбрать изображение в градациях серого для импорта высот"};
   const TOOL_EN={"mountain": "Draw a connected mountain ridge along the brush stroke. Sharpness controls the ridge profile.", "raise": "Raise terrain under the brush.", "lower": "Lower terrain under the brush.", "softRaise": "Raise terrain with a soft edge falloff.", "hardRaise": "Raise terrain with a firm, nearly flat profile.", "softLower": "Lower terrain with a soft edge falloff.", "hardLower": "Lower terrain with a firm profile.", "pinch": "Pull surrounding heights toward the brush center.", "inflate": "Create a smooth dome under the brush.", "deflate": "Press a smooth depression into the terrain.", "clay": "Build terrain mass like adding clay.", "blob": "Add a soft Gaussian-shaped mound.", "amplify": "Increase local height differences.", "dampen": "Reduce local height differences.", "smooth": "Blend abrupt height changes.", "polish": "Apply strong smoothing for a polished surface.", "sharpen": "Increase fine relief contrast.", "flatten": "Flatten toward the average height under the brush.", "plateau": "Flatten toward the selected target height.", "ramp": "Create a slope along the stroke direction.", "cliff": "Create a steep step across the stroke direction.", "wall": "Draw a narrow raised wall along the stroke.", "basin": "Carve a broad bowl-shaped depression.", "gorge": "Carve a deep narrow gorge along the stroke.", "berm": "Create a ring-shaped embankment near the brush edge.", "saddle": "Lower the center to form a mountain saddle.", "notch": "Cut a narrow notch across the stroke.", "lake": "Carve a basin with a flat target water level.", "fill": "Move all heights under the brush toward the target level.", "lowland": "Blend terrain softly toward the target elevation.", "coast": "Shape broad beaches and low coastal shelves.", "shelf": "Shape a shallow coastal shelf.", "cove": "Carve a rounded cove toward low water.", "spit": "Build a narrow sand spit along the stroke.", "river": "Carve a connected river valley toward sea level.", "channel": "Carve a narrow channel along the stroke.", "delta": "Create a low fan-shaped river delta.", "sea": "Blend terrain down toward the sea floor.", "noise": "Add natural procedural surface detail.", "erode": "Move material downhill to imitate erosion.", "deposit": "Add accumulated material under the brush.", "terrace": "Quantize local heights into steps.", "striate": "Add parallel striations along the stroke.", "ripple": "Add concentric wavy relief.", "scratch": "Cut a thin scratch across the stroke.", "crack": "Cut a deeper narrow crack.", "pockmark": "Create scattered small depressions.", "pebble": "Add fine pebble-like surface noise.", "weather": "Soften and roughen terrain as weathering.", "grain": "Add very fine surface grain.", "stampVolcano": "Stamp a volcanic cone with a central crater.", "stampCrater": "Stamp an impact or volcanic crater with a rim.", "stampHill": "Stamp a smooth round hill.", "stampCone": "Stamp a straight cone.", "stampMesa": "Stamp a flat-topped mesa.", "stampCaldera": "Stamp a broad caldera with a raised rim.", "stampRidge": "Stamp an elongated ridge mound.", "stampSpire": "Stamp a sharp vertical spire.", "stampPyramid": "Stamp a four-sided pyramid.", "stampBowl": "Stamp a bowl-shaped depression.", "stampArch": "Stamp two raised supports resembling an arch.", "stampAtoll": "Stamp a ring-shaped atoll.", "stampTwin": "Stamp two neighboring hills.", "stampDunes": "Stamp a patch of parallel dunes.", "stampTor": "Stamp scattered tor-like rocks.", "stampRamp": "Stamp a directional ramp."};
   const TOOL_RU={"mountain": "Хребет вдоль движения кисти. Острота — слайдер sharpness.", "raise": "Поднять рельеф под кистью.", "lower": "Опустить рельеф под кистью.", "softRaise": "Мягкий подъём, сильный falloff к краям.", "hardRaise": "Жёсткий подъём, почти плоская «таблетка».", "softLower": "Мягкое опускание.", "hardLower": "Жёсткое опускание.", "pinch": "Тянет высоты к центру кисти.", "inflate": "Купол из центра кисти.", "deflate": "Обратный купол — вдавить центр.", "clay": "Нарастить массу как глиной.", "blob": "Мягкий сгусток (гаусс).", "amplify": "Усилить перепады относительно центра.", "dampen": "Ослабить перепады относительно центра.", "smooth": "Сгладить резкие перепады.", "polish": "Сильное сглаживание.", "sharpen": "Заострить детали (unsharp).", "flatten": "Плато по средней высоте под кистью.", "plateau": "Плато на target height.", "ramp": "Уклон вдоль направления штриха.", "cliff": "Обрыв поперёк штриха. Сила = высота уступа.", "wall": "Узкая стена-хребет вдоль штриха.", "basin": "Чаша / котловина.", "gorge": "Глубокое узкое ущелье вдоль штриха.", "berm": "Кольцевой вал у края кисти.", "saddle": "Седловина — понижение центра.", "notch": "Узкий вырез поперёк штриха.", "lake": "Озеро: чаша + уровень воды = target height.", "fill": "Залить всё под кистью к target height.", "lowland": "Смешать к target height мягко.", "coast": "Пляж ~2.5 m.", "shelf": "Прибрежный шельф.", "cove": "Бухта — сгладить к низкой воде.", "spit": "Узкая коса вдоль штриха.", "river": "Река/долина к уровню моря.", "channel": "Канал вдоль штриха.", "delta": "Веер дельты.", "sea": "Увести в море (sea floor).", "noise": "Крупный природный шум.", "erode": "Эрозия — осыпание вниз по склону.", "deposit": "Нанос материала.", "terrace": "Ступени/террасы.", "striate": "Штрихи вдоль штриха.", "ripple": "Волнистая рябь.", "scratch": "Тонкая царапина поперёк.", "crack": "Трещина вдоль направления.", "pockmark": "Точечные выбоины.", "pebble": "Мелкая «галька».", "weather": "Выветривание + лёгкий шум.", "grain": "Мелкое зерно поверхности.", "stampVolcano": "Штамп вулкана с кратером.", "stampCrater": "Штамп ударного кратера.", "stampHill": "Мягкий холм.", "stampCone": "Конус.", "stampMesa": "Столовая гора.", "stampCaldera": "Кальдера.", "stampRidge": "Гряда-штамп.", "stampSpire": "Острый шпиль.", "stampPyramid": "Пирамида.", "stampBowl": "Чаша-штамп.", "stampArch": "Две опоры / арка.", "stampAtoll": "Кольцо атолла.", "stampTwin": "Два холма рядом.", "stampDunes": "Дюны.", "stampTor": "Скальные торы.", "stampRamp": "Пандус-штамп."};
@@ -4077,12 +4540,25 @@ refreshPresetList();
   ID_TIPS_EN.maskLandOnly='Restrict material painting to land';
   ID_TIPS_EN.lang_ru='Switch interface to Russian';
   ID_TIPS_EN.mapMakeIsland='Surround the selected real terrain with sea and generate a smooth coastal shelf';
+  ID_TIPS_EN.mapImportRoads='Load OpenStreetMap roads into the selected terrain during map import';
+  ID_TIPS_EN.mapImportBuildings='Load OpenStreetMap building footprints into the selected terrain during map import';
+  ID_TIPS_EN.exportRoads='Export the grayscale OpenStreetMap road reference mask';
+  ID_TIPS_EN.exportBuildings='Export the grayscale OpenStreetMap building reference mask';
+  ID_TIPS_EN.sculpt3dToggle='Enable direct terrain sculpting in the 3D preview; hold Alt while dragging to orbit';
+  ID_TIPS_EN.openSculptTools='Open the full sculpting tool drawer without leaving the 3D preview';
   ID_TIPS_EN.mapLayerMode='Switch between street, satellite, and topographic map views';
   ID_TIPS_EN.mapSearchInput='Enter a place, city, or address to find it on the map';
   ID_TIPS_EN.mapSearchButton='Search for the entered place on the map';
   ID_TIPS_EN.showTreeContours='Show terrain elevation contour lines every 20 meters while editing trees';
   ID_TIPS_RU.tabMap='Открыть реальную карту и выбрать рельеф для импорта';
+  ID_TIPS_RU.mapImportRoads='Загрузить дороги OpenStreetMap в выбранный рельеф';
+  ID_TIPS_RU.mapImportBuildings='Загрузить контуры домов OpenStreetMap в выбранный рельеф';
+  ID_TIPS_RU.exportRoads='Экспортировать справочную маску дорог OpenStreetMap';
+  ID_TIPS_RU.exportBuildings='Экспортировать справочную маску домов OpenStreetMap';
   ID_TIPS_RU.mapMakeIsland='Окружить выбранный реальный рельеф морем и создать сглаженный прибрежный шельф';
+  ID_TIPS_RU.mapImportRoads='Загрузить дороги OpenStreetMap при импорте выбранной области карты';
+  ID_TIPS_EN.pReferenceMaskSize='Choose the independent road and building mask resolution; 2048 or 4096 gives sharper reference layers';
+  ID_TIPS_RU.pReferenceMaskSize='Выбрать отдельное разрешение масок дорог и домов; 2048 или 4096 дают более чёткие слои';
   ID_TIPS_RU.mapLayerMode='Переключать обычную, спутниковую и топографическую карту';
   ID_TIPS_RU.mapSearchInput='Введите место, город или адрес для поиска на карте';
   ID_TIPS_RU.mapSearchButton='Найти введённое место на карте';
@@ -4260,7 +4736,7 @@ refreshPresetList();
   const ACTION_ICONS={
     tabHeight:'mountain',tabMask:'layers-3',tabTrees:'trees',tabMap:'map',tab3d:'orbit',
     undoTop:'undo-2',redoTop:'redo-2',zoomOut2d:'zoom-out',zoomIn2d:'zoom-in',resetView:'scan',
-    saveProject:'save',loadProject:'folder-open',exportEXR:'file-down',exportMask:'layers-3',exportTrees:'tree-pine',exportBundle:'package',
+    saveProject:'save',loadProject:'folder-open',exportEXR:'file-down',exportMask:'layers-3',exportTrees:'tree-pine',exportRoads:'route',exportBuildings:'building-2',exportBundle:'package',
     btnRandomize:'shuffle',btnRegenBase:'refresh-cw',btnErode:'waves',btnTerraces:'layers-3',btnDunes:'waves',btnNoisePass:'sparkles',
     btnMirrorH:'flip-horizontal-2',btnMirrorV:'flip-vertical-2',btnImportHeight:'image-up',symMirrorX:'flip-horizontal-2',symMirrorY:'flip-vertical-2',
     symRadial:'rotate-ccw',presetSave:'save',presetLoad:'folder-open',regenMask:'refresh-cw',slopeAuto:'wand-sparkles',
