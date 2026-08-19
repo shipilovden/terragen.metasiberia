@@ -188,7 +188,7 @@ Main virtual environment and core project.
 [https://metasiberia.com/](https://metasiberia.com/)
 
 **GitHub:**  
-[https://github.com/shipilovden/sub-metasiberia](https://github.com/shipilovden/sub-metasiberia)
+https://github.com/shipilovden/sub-metasiberia
 
 ### Metasiberia Terrain Generator
 
@@ -198,7 +198,7 @@ Browser-based terrain generation and landscape editing.
 [https://terragen.metasiberia.com/](https://terragen.metasiberia.com/)
 
 **GitHub:**  
-[https://github.com/shipilovden/terragen.metasiberia](https://github.com/shipilovden/terragen.metasiberia)
+https://github.com/shipilovden/terragen.metasiberia
 
 ### Metasiberia Avatars Creator
 
@@ -208,7 +208,7 @@ Browser-based 3D avatar customization and texture editing.
 [https://avatars.metasiberia.com/](https://avatars.metasiberia.com/)
 
 **GitHub:**  
-[https://github.com/shipilovden/avatars.metasiberia](https://github.com/shipilovden/avatars.metasiberia)
+https://github.com/shipilovden/avatars.metasiberia
 
 ## Author
 
@@ -217,7 +217,7 @@ Browser-based 3D avatar customization and texture editing.
 Creator and developer of **Metasiberia**, **Metasiberia Terrain Generator**, and **Metasiberia Avatars Creator**.
 
 **GitHub:**  
-[https://github.com/shipilovden](https://github.com/shipilovden)
+https://github.com/shipilovden
 
 **Telegram:**  
 [https://t.me/denshipilov_metasiberia](https://t.me/denshipilov_metasiberia)
@@ -227,6 +227,66 @@ Creator and developer of **Metasiberia**, **Metasiberia Terrain Generator**, and
 
 **Metasiberia:**  
 [https://metasiberia.com/](https://metasiberia.com/)
+
+## Real-World Terrain Examples
+
+Examples of real terrain reconstructed from geographic elevation data and imported into **Metasiberia Terrain Generator**.
+
+The terrain geometry is based on real-world elevation data and can be further edited using the TerrainGen sculpting tools.
+
+<p align="center">
+  <img src="docs/images/real-terrain/Tayzhina.png" alt="Real terrain — Tayzhina, Kemerovo Region, Russia" width="100%">
+  <br>
+  <sub><strong>Tayzhina</strong> — Kemerovo Region, Russia</sub>
+</p>
+
+<br>
+
+<p align="center">
+  <img src="docs/images/real-terrain/Sheregesh.png" alt="Real terrain — Sheregesh, Kemerovo Region, Russia" width="100%">
+  <br>
+  <sub><strong>Sheregesh</strong> — Kemerovo Region, Russia</sub>
+</p>
+
+<br>
+
+<p align="center">
+  <img src="docs/images/real-terrain/Novokuznetsk.png" alt="Real terrain — Novokuznetsk, Kemerovo Region, Russia" width="100%">
+  <br>
+  <sub><strong>Novokuznetsk</strong> — Kemerovo Region, Russia</sub>
+</p>
+
+<br>
+
+<p align="center">
+  <img src="docs/images/real-terrain/Kemerovo.png" alt="Real terrain — Kemerovo, Kemerovo Region, Russia" width="100%">
+  <br>
+  <sub><strong>Kemerovo</strong> — Kemerovo Region, Russia</sub>
+</p>
+
+<br>
+
+<p align="center">
+  <img src="docs/images/real-terrain/Tomsk.png" alt="Real terrain — Tomsk, Tomsk Region, Russia" width="100%">
+  <br>
+  <sub><strong>Tomsk</strong> — Tomsk Region, Russia</sub>
+</p>
+
+<br>
+
+<p align="center">
+  <img src="docs/images/real-terrain/Krasnoyarsk.png" alt="Real terrain — Krasnoyarsk, Krasnoyarsk Krai, Russia" width="100%">
+  <br>
+  <sub><strong>Krasnoyarsk</strong> — Krasnoyarsk Krai, Russia</sub>
+</p>
+
+<br>
+
+<p align="center">
+  <img src="docs/images/real-terrain/Surgut.png" alt="Real terrain — Surgut, Khanty-Mansi Autonomous Okrug — Yugra, Russia" width="100%">
+  <br>
+  <sub><strong>Surgut</strong> — Khanty-Mansi Autonomous Okrug — Yugra, Russia</sub>
+</p>
 
 ---
 
