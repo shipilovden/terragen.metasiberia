@@ -64,6 +64,8 @@ function contextWithFunctions(names, values = {}) {
     treeMask,
     treeAutoMask: new Uint8ClampedArray(G * G),
     treeMaterialOverrideA: new Uint8ClampedArray(G * G),
+    geoRoadMask: new Uint8ClampedArray(G * G),
+    geoBuildingMask: new Uint8ClampedArray(G * G),
     snapshot() {},
     ctx: {createImageData(w, h) { return {width: w, height: h, data: new Uint8ClampedArray(w * h * 4)}; }},
     $() { return null; },
